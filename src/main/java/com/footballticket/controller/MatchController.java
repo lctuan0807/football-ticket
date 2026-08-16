@@ -47,6 +47,7 @@ public class MatchController {
   // Get match by id
   @GetMapping("/{id}")
   public ResponseEntity<MatchDTO> getMatch(@PathVariable Long id) {
+    log.info("MatchController | getMatch | Getting match with id: {}", id);
     MatchDTO match = matchService.getMatch(id);
     return ResponseEntity.ok(match);
   }
