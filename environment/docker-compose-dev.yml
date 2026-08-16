@@ -17,3 +17,11 @@ services:
       - "5433:5432"
     networks:
       - footballticket-network
+
+  redis:
+    image: redis:7
+    container_name: football-ticket-redis
+    ports:
+      - "6389:6379"
+    networks:
+      - footballticket-network
