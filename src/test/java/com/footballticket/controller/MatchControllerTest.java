@@ -85,6 +85,25 @@ class MatchControllerTest {
           "stage": "1",
           "season": "2025/2026",
           "homeTeam": "Arsenal",
+          "kickoffAt": "2026-08-20 18:00:00",
+          "stadium": "Emirates Stadium"
+        }
+        """;
+
+    mockMvc.perform(post("/api/v1/matches")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(requestJson))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void createMatch_returnsBadRequest_whenDateIsInvalid() throws Exception {
+    String requestJson = """
+        {
+          "competition": "Premier League",
+          "stage": "1",
+          "season": "2025/2026",
+          "homeTeam": "Arsenal",
           "kickoffAt": "2026-08-20T18:00:00",
           "stadium": "Emirates Stadium"
         }

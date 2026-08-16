@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 
 import com.footballticket.service.RedisService;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
 

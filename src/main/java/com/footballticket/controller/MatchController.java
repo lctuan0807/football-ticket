@@ -33,7 +33,7 @@ public class MatchController {
   @PostMapping
   public ResponseEntity<MatchDTO> createMatch(@RequestBody @Valid CreateMatchRequest request) {
     MatchDTO match = matchService.createMatch(request);
-    return ResponseEntity.ok(match);
+    return ResponseEntity.ok().body(match);
   }
 
   // Get all matches with pagination
@@ -49,14 +49,14 @@ public class MatchController {
   public ResponseEntity<MatchDTO> getMatch(@PathVariable Long id) {
     log.info("MatchController | getMatch | Getting match with id: {}", id);
     MatchDTO match = matchService.getMatch(id);
-    return ResponseEntity.ok(match);
+    return ResponseEntity.ok().body(match);
   }
 
   // Update a match
   @PutMapping("/{id}")
   public ResponseEntity<MatchDTO> updateMatch(@PathVariable Long id, @RequestBody @Valid UpdateMatchRequest request) {
     MatchDTO match = matchService.updateMatch(id, request);
-    return ResponseEntity.ok(match);
+    return ResponseEntity.ok().body(match);
   }
 
   // Delete a match
