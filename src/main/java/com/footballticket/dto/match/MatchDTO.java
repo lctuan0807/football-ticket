@@ -14,5 +14,5 @@ public class MatchDTO {
   private String awayTeam;
   private String date;
   private String status;
-  private LocalDateTime kickoffTime;
+  private LocalDateTime kickoffAt;
 }

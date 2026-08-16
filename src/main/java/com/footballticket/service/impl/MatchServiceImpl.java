@@ -1,11 +1,15 @@
 package com.footballticket.service.impl;
 
+import java.time.LocalDateTime;
+
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
 import com.footballticket.dto.match.CreateMatchRequest;
 import com.footballticket.dto.match.MatchDTO;
 import com.footballticket.entity.MatchEntity;
+import com.footballticket.enums.MatchStatusEnum;
+import com.footballticket.exceptions.MatchAlreadyExistsException;
 import com.footballticket.repository.MatchRepository;
 import com.footballticket.service.MatchService;
 
@@ -30,6 +34,14 @@ public class MatchServiceImpl implements MatchService {
     match.setAwayTeam(request.awayTeam());
     match.setKickoffAt(request.kickoffAt());
     match.setStadium(request.stadium());
+    match.setStatus(MatchStatusEnum.SCHEDULED.toInt());
+    match.setCreatedAt(LocalDateTime.now());
+    match.setUpdatedAt(LocalDateTime.now());
+
+    if (matchRepository.existsByHomeTeamAndAwayTeamAndSeason(
+        match.getHomeTeam(), match.getAwayTeam(), match.getSeason())) {
+      throw new MatchAlreadyExistsException("Match already exists!");
+    }
 
     MatchEntity saved = matchRepository.save(match);
     log.info("Match created for {} vs {} (id={})", saved.getHomeTeam(), saved.getAwayTeam(),

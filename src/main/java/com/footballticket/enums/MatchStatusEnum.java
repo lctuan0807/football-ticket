@@ -5,5 +5,9 @@ public enum MatchStatusEnum {
   LIVE,
   FINISHED,
   POSTPONED,
-  CANCELLED
+  CANCELLED;
+
+  public int toInt() {
+    return this.ordinal();
+  }
 }
