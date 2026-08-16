@@ -1,0 +1,19 @@
+networks:
+  footballticket-network:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: football-ticket-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: football_ticket
+    volumes:
+      - ./data/postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5433:5432"
+    networks:
+      - footballticket-network
