@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +33,7 @@ import com.footballticket.enums.MatchStatusEnum;
 import com.footballticket.exceptions.MatchAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.MatchRepository;
+import com.footballticket.service.RedisService;
 
 @ExtendWith(MockitoExtension.class)
 class MatchServiceImplTest {
@@ -41,6 +43,9 @@ class MatchServiceImplTest {
 
   @Mock
   private ModelMapper modelMapper;
+
+  @Mock
+  private RedisService redisService;
 
   private MatchServiceImpl matchService;
 
@@ -55,7 +60,7 @@ class MatchServiceImplTest {
 
   @BeforeEach
   void setUp() {
-    matchService = new MatchServiceImpl(matchRepository, modelMapper);
+    matchService = new MatchServiceImpl(matchRepository, modelMapper, redisService);
   }
 
   @Test
@@ -105,7 +110,21 @@ class MatchServiceImplTest {
   }
 
   @Test
-  void getMatch_returnsMatchDto_whenMatchExists() {
+  void getMatch_returnsCachedDto_whenPresentInCache() {
+    MatchDTO cachedDto = new MatchDTO();
+    cachedDto.setId(1L);
+    given(redisService.getObject("match:1", MatchDTO.class)).willReturn(cachedDto);
+
+    MatchDTO result = matchService.getMatch(1L);
+
+    assertThat(result).isSameAs(cachedDto);
+    verify(matchRepository, never()).findById(any());
+  }
+
+  @Test
+  void getMatch_fetchesFromRepositoryAndCachesResult_whenNotInCache() {
+    given(redisService.getObject("match:1", MatchDTO.class)).willReturn(null);
+
     MatchEntity match = new MatchEntity();
     match.setId(1L);
     given(matchRepository.findById(1L)).willReturn(Optional.of(match));
@@ -117,10 +136,12 @@ class MatchServiceImplTest {
     MatchDTO result = matchService.getMatch(1L);
 
     assertThat(result).isSameAs(expectedDto);
+    verify(redisService).setObject(eq("match:1"), eq(expectedDto), any(Duration.class));
   }
 
   @Test
   void getMatch_throwsResourceNotFoundException_whenMatchDoesNotExist() {
+    given(redisService.getObject("match:1", MatchDTO.class)).willReturn(null);
     given(matchRepository.findById(1L)).willReturn(Optional.empty());
 
     assertThatThrownBy(() -> matchService.getMatch(1L))
@@ -199,6 +220,7 @@ class MatchServiceImplTest {
     assertThat(persisted.getKickoffAt()).isEqualTo(updateRequest.kickoffAt());
     assertThat(persisted.getStadium()).isEqualTo(updateRequest.stadium());
     assertThat(persisted.getUpdatedAt()).isNotNull();
+    verify(redisService).delete("match:1");
   }
 
   @Test
@@ -222,9 +244,10 @@ class MatchServiceImplTest {
   }
 
   @Test
-  void deleteMatch_deletesMatchById() {
+  void deleteMatch_deletesMatchByIdAndEvictsCache() {
     matchService.deleteMatch(1L);
 
     verify(matchRepository).deleteById(1L);
+    verify(redisService).delete("match:1");
   }
 }

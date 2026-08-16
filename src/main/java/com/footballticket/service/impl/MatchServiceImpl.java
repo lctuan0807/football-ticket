@@ -1,5 +1,6 @@
 package com.footballticket.service.impl;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 import org.modelmapper.ModelMapper;
@@ -16,6 +17,7 @@ import com.footballticket.exceptions.MatchAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.MatchRepository;
 import com.footballticket.service.MatchService;
+import com.footballticket.service.RedisService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,8 +26,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @RequiredArgsConstructor
 public class MatchServiceImpl implements MatchService {
+  private static final String MATCH_CACHE_KEY_PREFIX = "match:";
+  private static final Duration MATCH_CACHE_TTL = Duration.ofMinutes(10);
+
+  private static int cacheHitCount = 0;
+  private static int cacheMissCount = 0;
+
   private final MatchRepository matchRepository;
   private final ModelMapper modelMapper;
+  private final RedisService redisService;
 
   // create a match
   @Override
@@ -58,9 +67,25 @@ public class MatchServiceImpl implements MatchService {
   // Get match by id
   @Override
   public MatchDTO getMatch(Long id) {
+    String cacheKey = MATCH_CACHE_KEY_PREFIX + id;
+
+    MatchDTO cached = redisService.getObject(cacheKey, MatchDTO.class);
+    log.info("MatchService | getMatch | cached {}", cached);
+    if (cached != null) {
+      log.info("MatchService | getMatch | Cache hit | id: {}", id);
+      cacheHitCount++;
+      return cached;
+    }
+
+    log.info("MatchService | getMatch | Cache miss | Fetching match with id: {}", id);
+    cacheMissCount++;
+    redisService.setObject("cacheHitCount", cacheHitCount);
+    redisService.setObject("cacheMissCount", cacheMissCount);
     MatchEntity match = matchRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Match not found!"));
-    return modelMapper.map(match, MatchDTO.class);
+    MatchDTO dto = modelMapper.map(match, MatchDTO.class);
+    redisService.setObject(cacheKey, dto, MATCH_CACHE_TTL);
+    return dto;
   }
 
   // Get all matches with pagination, optionally filtered by status
@@ -86,6 +111,7 @@ public class MatchServiceImpl implements MatchService {
     match.setStadium(request.stadium());
     match.setUpdatedAt(LocalDateTime.now());
     MatchEntity saved = matchRepository.save(match);
+    redisService.delete(MATCH_CACHE_KEY_PREFIX + id);
     log.info("Match updated for {} vs {} (id={})", saved.getHomeTeam(), saved.getAwayTeam(),
         saved.getId());
     return modelMapper.map(saved, MatchDTO.class);
@@ -95,5 +121,6 @@ public class MatchServiceImpl implements MatchService {
   @Override
   public void deleteMatch(Long id) {
     matchRepository.deleteById(id);
+    redisService.delete(MATCH_CACHE_KEY_PREFIX + id);
   }
 }
