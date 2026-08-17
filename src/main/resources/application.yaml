@@ -34,3 +34,7 @@ spring:
     redis:
       host: localhost
       port: 6389
+
+jwt:
+  secret: ${JWT_SECRET:c0VjdXJlLURldi1Pbmx5LVNlY3JldC1LZXktRm9yLUpXVC1IUzI1Ni1TaWduaW5nLTEyMzQ1Ng==}
+  expiration-ms: ${JWT_EXPIRATION_MS:3600000}
