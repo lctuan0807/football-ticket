@@ -3,6 +3,7 @@ package com.footballticket.service.cache;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +19,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 
 import com.footballticket.dto.tickettype.TicketTypeDTO;
 import com.footballticket.entity.MatchEntity;
@@ -37,28 +41,41 @@ class TicketTypeCacheServiceTest {
   @Mock
   private ModelMapper modelMapper;
 
+  @Mock
+  private RedissonClient redissonClient;
+
+  @Mock
+  private RLock lock;
+
   private TicketTypeCacheService ticketTypeCacheService;
 
   @BeforeEach
   void setUp() {
-    ticketTypeCacheService = new TicketTypeCacheService(redisService, ticketTypeRepository, modelMapper);
+    ticketTypeCacheService = new TicketTypeCacheService(redisService,
+        ticketTypeRepository, modelMapper,
+        redissonClient);
   }
 
   @Test
   void getTicketType_returnsCachedDto_whenPresentInCache() {
     TicketTypeDTO cachedDto = new TicketTypeDTO();
     cachedDto.setId(10L);
-    given(redisService.getObject("ticketType:10", TicketTypeDTO.class)).willReturn(cachedDto);
+    given(redisService.getObject("ticketType:10",
+        TicketTypeDTO.class)).willReturn(cachedDto);
 
     TicketTypeDTO result = ticketTypeCacheService.getTicketType(10L);
 
     assertThat(result).isSameAs(cachedDto);
     verify(ticketTypeRepository, never()).findById(any());
+    verify(redissonClient, never()).getLock(anyString());
   }
 
   @Test
-  void getTicketType_fetchesFromRepositoryAndCachesDto_whenNotInCache() {
-    given(redisService.getObject("ticketType:10", TicketTypeDTO.class)).willReturn(null);
+  void getTicketType_fetchesFromRepositoryAndCachesDto_whenNotInCache() throws InterruptedException {
+    given(redisService.getObject("ticketType:10",
+        TicketTypeDTO.class)).willReturn(null);
+    given(redissonClient.getLock("lock:ticketType:10")).willReturn(lock);
+    given(lock.tryLock(1, 5, TimeUnit.SECONDS)).willReturn(true);
 
     MatchEntity match = new MatchEntity();
     match.setId(1L);
@@ -69,18 +86,24 @@ class TicketTypeCacheServiceTest {
 
     TicketTypeDTO expectedDto = new TicketTypeDTO();
     expectedDto.setId(10L);
-    given(modelMapper.map(ticketType, TicketTypeDTO.class)).willReturn(expectedDto);
+    given(modelMapper.map(ticketType,
+        TicketTypeDTO.class)).willReturn(expectedDto);
 
     TicketTypeDTO result = ticketTypeCacheService.getTicketType(10L);
 
     assertThat(result).isSameAs(expectedDto);
     assertThat(result.getMatchId()).isEqualTo(1L);
-    verify(redisService).setObject(eq("ticketType:10"), eq(expectedDto), any(Duration.class));
+    verify(redisService).setObject(eq("ticketType:10"), eq(expectedDto),
+        any(Duration.class));
+    verify(lock).unlock();
   }
 
   @Test
-  void getTicketType_throwsResourceNotFoundException_whenNotExists() {
-    given(redisService.getObject("ticketType:10", TicketTypeDTO.class)).willReturn(null);
+  void getTicketType_throwsResourceNotFoundException_whenNotExists() throws InterruptedException {
+    given(redisService.getObject("ticketType:10",
+        TicketTypeDTO.class)).willReturn(null);
+    given(redissonClient.getLock("lock:ticketType:10")).willReturn(lock);
+    given(lock.tryLock(1, 5, TimeUnit.SECONDS)).willReturn(true);
     given(ticketTypeRepository.findById(10L)).willReturn(Optional.empty());
 
     assertThatThrownBy(() -> ticketTypeCacheService.getTicketType(10L))
@@ -88,6 +111,21 @@ class TicketTypeCacheServiceTest {
         .hasMessage("Ticket type not found!");
 
     verify(redisService, never()).setObject(any(), any(), any());
+    verify(lock).unlock();
+  }
+
+  @Test
+  void getTicketType_throwsIllegalStateException_whenLockNotAcquired() throws InterruptedException {
+    given(redisService.getObject("ticketType:10",
+        TicketTypeDTO.class)).willReturn(null);
+    given(redissonClient.getLock("lock:ticketType:10")).willReturn(lock);
+    given(lock.tryLock(1, 5, TimeUnit.SECONDS)).willReturn(false);
+
+    assertThatThrownBy(() -> ticketTypeCacheService.getTicketType(10L))
+        .isInstanceOf(IllegalStateException.class);
+
+    verify(ticketTypeRepository, never()).findById(any());
+    verify(lock, never()).unlock();
   }
 
   @Test
