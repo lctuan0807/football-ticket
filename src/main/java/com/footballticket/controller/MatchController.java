@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.footballticket.common.ApiResponse;
 import com.footballticket.dto.match.CreateMatchRequest;
 import com.footballticket.dto.match.MatchDTO;
 import com.footballticket.dto.match.UpdateMatchRequest;
@@ -31,32 +32,33 @@ public class MatchController {
 
   // Create a match
   @PostMapping
-  public ResponseEntity<MatchDTO> createMatch(@RequestBody @Valid CreateMatchRequest request) {
+  public ResponseEntity<ApiResponse<MatchDTO>> createMatch(@RequestBody @Valid CreateMatchRequest request) {
     MatchDTO match = matchService.createMatch(request);
-    return ResponseEntity.ok().body(match);
+    return ResponseEntity.ok(ApiResponse.success("Match created successfully", match));
   }
 
   // Get all matches with pagination
   @GetMapping
-  public ResponseEntity<Page<MatchDTO>> getAllMatches(Pageable pageable,
+  public ResponseEntity<ApiResponse<Page<MatchDTO>>> getAllMatches(Pageable pageable,
       @RequestParam(required = false) Integer status) {
     Page<MatchDTO> matches = matchService.getAllMatches(pageable, status);
-    return ResponseEntity.ok(matches);
+    return ResponseEntity.ok(ApiResponse.success(matches));
   }
 
   // Get match by id
   @GetMapping("/{id}")
-  public ResponseEntity<MatchDTO> getMatch(@PathVariable Long id) {
+  public ResponseEntity<ApiResponse<MatchDTO>> getMatch(@PathVariable Long id) {
     log.info("MatchController | getMatch | Getting match with id: {}", id);
     MatchDTO match = matchService.getMatch(id);
-    return ResponseEntity.ok().body(match);
+    return ResponseEntity.ok(ApiResponse.success(match));
   }
 
   // Update a match
   @PutMapping("/{id}")
-  public ResponseEntity<MatchDTO> updateMatch(@PathVariable Long id, @RequestBody @Valid UpdateMatchRequest request) {
+  public ResponseEntity<ApiResponse<MatchDTO>> updateMatch(@PathVariable Long id,
+      @RequestBody @Valid UpdateMatchRequest request) {
     MatchDTO match = matchService.updateMatch(id, request);
-    return ResponseEntity.ok().body(match);
+    return ResponseEntity.ok(ApiResponse.success("Match updated successfully", match));
   }
 
   // Delete a match

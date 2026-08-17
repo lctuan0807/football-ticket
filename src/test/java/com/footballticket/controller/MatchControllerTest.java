@@ -72,9 +72,10 @@ class MatchControllerTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id", is(1)))
-        .andExpect(jsonPath("$.homeTeam", is("Arsenal")))
-        .andExpect(jsonPath("$.awayTeam", is("Chelsea")));
+        .andExpect(jsonPath("$.code", is(200)))
+        .andExpect(jsonPath("$.data.id", is(1)))
+        .andExpect(jsonPath("$.data.homeTeam", is("Arsenal")))
+        .andExpect(jsonPath("$.data.awayTeam", is("Chelsea")));
   }
 
   @Test
@@ -126,9 +127,9 @@ class MatchControllerTest {
 
     mockMvc.perform(get("/api/v1/matches/1"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id", is(1)))
-        .andExpect(jsonPath("$.homeTeam", is("Arsenal")))
-        .andExpect(jsonPath("$.awayTeam", is("Chelsea")));
+        .andExpect(jsonPath("$.data.id", is(1)))
+        .andExpect(jsonPath("$.data.homeTeam", is("Arsenal")))
+        .andExpect(jsonPath("$.data.awayTeam", is("Chelsea")));
   }
 
   @Test
@@ -136,7 +137,9 @@ class MatchControllerTest {
     given(matchService.getMatch(1L)).willThrow(new ResourceNotFoundException("Match not found!"));
 
     mockMvc.perform(get("/api/v1/matches/1"))
-        .andExpect(status().isNotFound());
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code", is(404)))
+        .andExpect(jsonPath("$.message", is("Match not found!")));
   }
 
   @Test
@@ -151,8 +154,8 @@ class MatchControllerTest {
 
     mockMvc.perform(get("/api/v1/matches"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content[0].id", is(1)))
-        .andExpect(jsonPath("$.totalElements", is(1)));
+        .andExpect(jsonPath("$.data.content[0].id", is(1)))
+        .andExpect(jsonPath("$.data.totalElements", is(1)));
   }
 
   @Test
@@ -166,7 +169,7 @@ class MatchControllerTest {
 
     mockMvc.perform(get("/api/v1/matches").param("status", "2"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content[0].id", is(1)));
+        .andExpect(jsonPath("$.data.content[0].id", is(1)));
   }
 
   @Test
@@ -191,8 +194,8 @@ class MatchControllerTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.homeTeam", is("Real Madrid")))
-        .andExpect(jsonPath("$.awayTeam", is("Barcelona")));
+        .andExpect(jsonPath("$.data.homeTeam", is("Real Madrid")))
+        .andExpect(jsonPath("$.data.awayTeam", is("Barcelona")));
   }
 
   @Test

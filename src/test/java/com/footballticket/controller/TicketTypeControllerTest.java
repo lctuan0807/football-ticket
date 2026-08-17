@@ -61,9 +61,10 @@ class TicketTypeControllerTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id", is(1)))
-        .andExpect(jsonPath("$.matchId", is(1)))
-        .andExpect(jsonPath("$.name", is("VIP")));
+        .andExpect(jsonPath("$.code", is(200)))
+        .andExpect(jsonPath("$.data.id", is(1)))
+        .andExpect(jsonPath("$.data.matchId", is(1)))
+        .andExpect(jsonPath("$.data.name", is("VIP")));
   }
 
   @Test
@@ -92,7 +93,9 @@ class TicketTypeControllerTest {
     mockMvc.perform(post("/api/v1/ticket-types")
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isNotFound());
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code", is(404)))
+        .andExpect(jsonPath("$.message", is("Match not found!")));
   }
 
   @Test
@@ -105,7 +108,9 @@ class TicketTypeControllerTest {
     mockMvc.perform(post("/api/v1/ticket-types")
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isConflict());
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code", is(409)))
+        .andExpect(jsonPath("$.message", is("Ticket type already exists for this match!")));
   }
 
   @Test
@@ -123,8 +128,8 @@ class TicketTypeControllerTest {
 
     mockMvc.perform(get("/api/v1/ticket-types/1"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id", is(1)))
-        .andExpect(jsonPath("$.name", is("VIP")));
+        .andExpect(jsonPath("$.data.id", is(1)))
+        .andExpect(jsonPath("$.data.name", is("VIP")));
   }
 
   @Test
@@ -132,7 +137,9 @@ class TicketTypeControllerTest {
     given(ticketTypeService.getTicketType(1L)).willThrow(new ResourceNotFoundException("Ticket type not found!"));
 
     mockMvc.perform(get("/api/v1/ticket-types/1"))
-        .andExpect(status().isNotFound());
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code", is(404)))
+        .andExpect(jsonPath("$.message", is("Ticket type not found!")));
   }
 
   @Test
@@ -149,8 +156,8 @@ class TicketTypeControllerTest {
 
     mockMvc.perform(get("/api/v1/ticket-types"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$", hasSize(1)))
-        .andExpect(jsonPath("$[0].id", is(1)));
+        .andExpect(jsonPath("$.data", hasSize(1)))
+        .andExpect(jsonPath("$.data[0].id", is(1)));
   }
 
   @Test
@@ -167,7 +174,7 @@ class TicketTypeControllerTest {
 
     mockMvc.perform(get("/api/v1/ticket-types").param("matchId", "1"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].id", is(1)));
+        .andExpect(jsonPath("$.data[0].id", is(1)));
   }
 
   @Test
@@ -188,8 +195,8 @@ class TicketTypeControllerTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.name", is("Category 1")))
-        .andExpect(jsonPath("$.price", is(300)));
+        .andExpect(jsonPath("$.data.name", is("Category 1")))
+        .andExpect(jsonPath("$.data.price", is(300)));
   }
 
   @Test
@@ -202,7 +209,9 @@ class TicketTypeControllerTest {
     mockMvc.perform(put("/api/v1/ticket-types/1")
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isNotFound());
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code", is(404)))
+        .andExpect(jsonPath("$.message", is("Ticket type not found!")));
   }
 
   @Test
