@@ -1,10 +1,14 @@
 package com.footballticket.dto.tickettype;
 
-public record TicketTypeDTO(
-    Long id,
-    Long matchId,
-    String name,
-    Integer price,
-    Integer quantity,
-    Integer availableQuantity) {
+import lombok.Data;
+
+@Data
+public class TicketTypeDTO {
+  private Long id;
+  private Long matchId;
+  private String name;
+  private String description;
+  private Integer price;
+  private Integer quantity;
+  private Integer availableQuantity;
 }

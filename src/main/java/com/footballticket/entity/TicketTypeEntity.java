@@ -34,6 +34,8 @@ public class TicketTypeEntity {
   @Column(nullable = false)
   private String name;
 
+  private String description;
+
   @Column(nullable = false)
   private Integer price;
 

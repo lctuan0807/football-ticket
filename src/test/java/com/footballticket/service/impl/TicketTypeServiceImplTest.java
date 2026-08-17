@@ -42,7 +42,7 @@ class TicketTypeServiceImplTest {
 
   private TicketTypeServiceImpl ticketTypeService;
 
-  private final CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", 500, 100);
+  private final CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", "Best seats", 500, 100);
 
   @BeforeEach
   void setUp() {
@@ -61,18 +61,21 @@ class TicketTypeServiceImplTest {
     saved.setMatch(match);
     given(ticketTypeRepository.save(any(TicketTypeEntity.class))).willReturn(saved);
 
-    TicketTypeDTO expectedDto = new TicketTypeDTO(10L, 1L, "VIP", 500, 100, 100);
+    TicketTypeDTO expectedDto = new TicketTypeDTO();
+    expectedDto.setId(10L);
     given(modelMapper.map(saved, TicketTypeDTO.class)).willReturn(expectedDto);
 
     TicketTypeDTO result = ticketTypeService.createTicketType(request);
 
     assertThat(result).isSameAs(expectedDto);
+    assertThat(result.getMatchId()).isEqualTo(1L);
 
     ArgumentCaptor<TicketTypeEntity> captor = ArgumentCaptor.forClass(TicketTypeEntity.class);
     verify(ticketTypeRepository).save(captor.capture());
     TicketTypeEntity persisted = captor.getValue();
     assertThat(persisted.getMatch()).isSameAs(match);
     assertThat(persisted.getName()).isEqualTo(request.name());
+    assertThat(persisted.getDescription()).isEqualTo(request.description());
     assertThat(persisted.getPrice()).isEqualTo(request.price());
     assertThat(persisted.getQuantity()).isEqualTo(request.quantity());
     assertThat(persisted.getAvailableQuantity()).isEqualTo(request.quantity());
@@ -112,12 +115,14 @@ class TicketTypeServiceImplTest {
     ticketType.setMatch(match);
     given(ticketTypeRepository.findById(10L)).willReturn(Optional.of(ticketType));
 
-    TicketTypeDTO expectedDto = new TicketTypeDTO(10L, 1L, "VIP", 500, 100, 100);
+    TicketTypeDTO expectedDto = new TicketTypeDTO();
+    expectedDto.setId(10L);
     given(modelMapper.map(ticketType, TicketTypeDTO.class)).willReturn(expectedDto);
 
     TicketTypeDTO result = ticketTypeService.getTicketType(10L);
 
     assertThat(result).isSameAs(expectedDto);
+    assertThat(result.getMatchId()).isEqualTo(1L);
   }
 
   @Test
@@ -138,7 +143,8 @@ class TicketTypeServiceImplTest {
     ticketType.setMatch(match);
     given(ticketTypeRepository.findAll()).willReturn(List.of(ticketType));
 
-    TicketTypeDTO expectedDto = new TicketTypeDTO(10L, 1L, "VIP", 500, 100, 100);
+    TicketTypeDTO expectedDto = new TicketTypeDTO();
+    expectedDto.setId(10L);
     given(modelMapper.map(ticketType, TicketTypeDTO.class)).willReturn(expectedDto);
 
     List<TicketTypeDTO> result = ticketTypeService.getAllTicketTypes(null);
@@ -156,7 +162,8 @@ class TicketTypeServiceImplTest {
     ticketType.setMatch(match);
     given(ticketTypeRepository.findByMatchId(1L)).willReturn(List.of(ticketType));
 
-    TicketTypeDTO expectedDto = new TicketTypeDTO(10L, 1L, "VIP", 500, 100, 100);
+    TicketTypeDTO expectedDto = new TicketTypeDTO();
+    expectedDto.setId(10L);
     given(modelMapper.map(ticketType, TicketTypeDTO.class)).willReturn(expectedDto);
 
     List<TicketTypeDTO> result = ticketTypeService.getAllTicketTypes(1L);
@@ -177,18 +184,21 @@ class TicketTypeServiceImplTest {
     given(ticketTypeRepository.findById(10L)).willReturn(Optional.of(existing));
     given(ticketTypeRepository.save(any(TicketTypeEntity.class))).willReturn(existing);
 
-    TicketTypeDTO expectedDto = new TicketTypeDTO(10L, 1L, "Category 1", 300, 150, 90);
+    TicketTypeDTO expectedDto = new TicketTypeDTO();
+    expectedDto.setId(10L);
     given(modelMapper.map(existing, TicketTypeDTO.class)).willReturn(expectedDto);
 
-    UpdateTicketTypeRequest updateRequest = new UpdateTicketTypeRequest("Category 1", 300, 150);
+    UpdateTicketTypeRequest updateRequest = new UpdateTicketTypeRequest("Category 1", "Mid-tier seats", 300, 150);
     TicketTypeDTO result = ticketTypeService.updateTicketType(10L, updateRequest);
 
     assertThat(result).isSameAs(expectedDto);
+    assertThat(result.getMatchId()).isEqualTo(1L);
 
     ArgumentCaptor<TicketTypeEntity> captor = ArgumentCaptor.forClass(TicketTypeEntity.class);
     verify(ticketTypeRepository).save(captor.capture());
     TicketTypeEntity persisted = captor.getValue();
     assertThat(persisted.getName()).isEqualTo("Category 1");
+    assertThat(persisted.getDescription()).isEqualTo("Mid-tier seats");
     assertThat(persisted.getPrice()).isEqualTo(300);
     assertThat(persisted.getQuantity()).isEqualTo(150);
     assertThat(persisted.getAvailableQuantity()).isEqualTo(90);
@@ -205,10 +215,9 @@ class TicketTypeServiceImplTest {
     existing.setAvailableQuantity(10);
     given(ticketTypeRepository.findById(10L)).willReturn(Optional.of(existing));
     given(ticketTypeRepository.save(any(TicketTypeEntity.class))).willReturn(existing);
-    given(modelMapper.map(existing, TicketTypeDTO.class))
-        .willReturn(new TicketTypeDTO(10L, 1L, "VIP", 500, 50, 0));
+    given(modelMapper.map(existing, TicketTypeDTO.class)).willReturn(new TicketTypeDTO());
 
-    UpdateTicketTypeRequest updateRequest = new UpdateTicketTypeRequest("VIP", 500, 50);
+    UpdateTicketTypeRequest updateRequest = new UpdateTicketTypeRequest("VIP", null, 500, 50);
     ticketTypeService.updateTicketType(10L, updateRequest);
 
     ArgumentCaptor<TicketTypeEntity> captor = ArgumentCaptor.forClass(TicketTypeEntity.class);
@@ -220,7 +229,7 @@ class TicketTypeServiceImplTest {
   void updateTicketType_throwsResourceNotFoundException_whenNotExists() {
     given(ticketTypeRepository.findById(10L)).willReturn(Optional.empty());
 
-    UpdateTicketTypeRequest updateRequest = new UpdateTicketTypeRequest("VIP", 500, 50);
+    UpdateTicketTypeRequest updateRequest = new UpdateTicketTypeRequest("VIP", null, 500, 50);
 
     assertThatThrownBy(() -> ticketTypeService.updateTicketType(10L, updateRequest))
         .isInstanceOf(ResourceNotFoundException.class)

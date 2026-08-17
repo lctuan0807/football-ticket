@@ -2,7 +2,6 @@ package com.footballticket.service.impl;
 
 import java.util.List;
 
-import org.hibernate.query.Page;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
@@ -41,6 +40,7 @@ public class TicketTypeServiceImpl implements TicketTypeService {
     TicketTypeEntity ticketType = new TicketTypeEntity();
     ticketType.setMatch(match);
     ticketType.setName(request.name());
+    ticketType.setDescription(request.description());
     ticketType.setPrice(request.price());
     ticketType.setQuantity(request.quantity());
     ticketType.setAvailableQuantity(request.quantity());
@@ -59,6 +59,7 @@ public class TicketTypeServiceImpl implements TicketTypeService {
 
   @Override
   public List<TicketTypeDTO> getAllTicketTypes(Long matchId) {
+    log.info("Getting all ticket types for match id={}", matchId);
     List<TicketTypeEntity> ticketTypes = matchId != null
         ? ticketTypeRepository.findByMatchId(matchId)
         : ticketTypeRepository.findAll();
@@ -72,6 +73,7 @@ public class TicketTypeServiceImpl implements TicketTypeService {
 
     int sold = ticketType.getQuantity() - ticketType.getAvailableQuantity();
     ticketType.setName(request.name());
+    ticketType.setDescription(request.description());
     ticketType.setPrice(request.price());
     ticketType.setQuantity(request.quantity());
     ticketType.setAvailableQuantity(Math.max(0, request.quantity() - sold));
@@ -87,6 +89,8 @@ public class TicketTypeServiceImpl implements TicketTypeService {
   }
 
   private TicketTypeDTO toDto(TicketTypeEntity entity) {
-    return modelMapper.map(entity, TicketTypeDTO.class);
+    TicketTypeDTO dto = modelMapper.map(entity, TicketTypeDTO.class);
+    dto.setMatchId(entity.getMatch().getId());
+    return dto;
   }
 }

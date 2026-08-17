@@ -45,8 +45,15 @@ class TicketTypeControllerTest {
 
   @Test
   void createTicketType_returnsCreatedTicketType_whenRequestIsValid() throws Exception {
-    CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", 500, 100);
-    TicketTypeDTO response = new TicketTypeDTO(1L, 1L, "VIP", 500, 100, 100);
+    CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", "Best seats", 500, 100);
+    TicketTypeDTO response = new TicketTypeDTO();
+    response.setId(1L);
+    response.setMatchId(1L);
+    response.setName("VIP");
+    response.setDescription("Best seats");
+    response.setPrice(500);
+    response.setQuantity(100);
+    response.setAvailableQuantity(100);
 
     given(ticketTypeService.createTicketType(any(CreateTicketTypeRequest.class))).willReturn(response);
 
@@ -77,7 +84,7 @@ class TicketTypeControllerTest {
 
   @Test
   void createTicketType_returnsNotFound_whenMatchDoesNotExist() throws Exception {
-    CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", 500, 100);
+    CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", "Best seats", 500, 100);
 
     given(ticketTypeService.createTicketType(any(CreateTicketTypeRequest.class)))
         .willThrow(new ResourceNotFoundException("Match not found!"));
@@ -90,7 +97,7 @@ class TicketTypeControllerTest {
 
   @Test
   void createTicketType_returnsConflict_whenDuplicateName() throws Exception {
-    CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", 500, 100);
+    CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", "Best seats", 500, 100);
 
     given(ticketTypeService.createTicketType(any(CreateTicketTypeRequest.class)))
         .willThrow(new ResourceAlreadyExistsException("Ticket type already exists for this match!"));
@@ -103,7 +110,14 @@ class TicketTypeControllerTest {
 
   @Test
   void getTicketType_returnsTicketType_whenExists() throws Exception {
-    TicketTypeDTO response = new TicketTypeDTO(1L, 1L, "VIP", 500, 100, 100);
+    TicketTypeDTO response = new TicketTypeDTO();
+    response.setId(1L);
+    response.setMatchId(1L);
+    response.setName("VIP");
+    response.setDescription("Best seats");
+    response.setPrice(500);
+    response.setQuantity(100);
+    response.setAvailableQuantity(100);
 
     given(ticketTypeService.getTicketType(1L)).willReturn(response);
 
@@ -123,7 +137,14 @@ class TicketTypeControllerTest {
 
   @Test
   void getTicketTypes_returnsAllResults_whenMatchIdNotProvided() throws Exception {
-    TicketTypeDTO ticketType = new TicketTypeDTO(1L, 1L, "VIP", 500, 100, 100);
+    TicketTypeDTO ticketType = new TicketTypeDTO();
+    ticketType.setId(1L);
+    ticketType.setMatchId(1L);
+    ticketType.setName("VIP");
+    ticketType.setDescription("Best seats");
+    ticketType.setPrice(500);
+    ticketType.setQuantity(100);
+    ticketType.setAvailableQuantity(100);
     given(ticketTypeService.getAllTicketTypes(isNull())).willReturn(List.of(ticketType));
 
     mockMvc.perform(get("/api/v1/ticket-types"))
@@ -134,7 +155,14 @@ class TicketTypeControllerTest {
 
   @Test
   void getTicketTypes_returnsFilteredResults_whenMatchIdProvided() throws Exception {
-    TicketTypeDTO ticketType = new TicketTypeDTO(1L, 1L, "VIP", 500, 100, 100);
+    TicketTypeDTO ticketType = new TicketTypeDTO();
+    ticketType.setId(1L);
+    ticketType.setMatchId(1L);
+    ticketType.setName("VIP");
+    ticketType.setDescription("Best seats");
+    ticketType.setPrice(500);
+    ticketType.setQuantity(100);
+    ticketType.setAvailableQuantity(100);
     given(ticketTypeService.getAllTicketTypes(eq(1L))).willReturn(List.of(ticketType));
 
     mockMvc.perform(get("/api/v1/ticket-types").param("matchId", "1"))
@@ -144,8 +172,15 @@ class TicketTypeControllerTest {
 
   @Test
   void updateTicketType_returnsUpdatedTicketType_whenValid() throws Exception {
-    UpdateTicketTypeRequest request = new UpdateTicketTypeRequest("Category 1", 300, 150);
-    TicketTypeDTO response = new TicketTypeDTO(1L, 1L, "Category 1", 300, 150, 150);
+    UpdateTicketTypeRequest request = new UpdateTicketTypeRequest("Category 1", "Mid-tier seats", 300, 150);
+    TicketTypeDTO response = new TicketTypeDTO();
+    response.setId(1L);
+    response.setMatchId(1L);
+    response.setName("Category 1");
+    response.setDescription("Mid-tier seats");
+    response.setPrice(300);
+    response.setQuantity(150);
+    response.setAvailableQuantity(150);
 
     given(ticketTypeService.updateTicketType(eq(1L), any(UpdateTicketTypeRequest.class))).willReturn(response);
 
@@ -159,7 +194,7 @@ class TicketTypeControllerTest {
 
   @Test
   void updateTicketType_returnsNotFound_whenNotExists() throws Exception {
-    UpdateTicketTypeRequest request = new UpdateTicketTypeRequest("Category 1", 300, 150);
+    UpdateTicketTypeRequest request = new UpdateTicketTypeRequest("Category 1", "Mid-tier seats", 300, 150);
 
     given(ticketTypeService.updateTicketType(eq(1L), any(UpdateTicketTypeRequest.class)))
         .willThrow(new ResourceNotFoundException("Ticket type not found!"));

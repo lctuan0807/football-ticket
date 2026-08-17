@@ -5,7 +5,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 public record UpdateTicketTypeRequest(
-    @NotBlank String name,
-    @NotNull @Positive Integer price,
-    @NotNull @Positive Integer quantity) {
+        @NotBlank String name,
+        String description,
+        @NotNull @Positive Integer price,
+        @NotNull @Positive Integer quantity) {
 }

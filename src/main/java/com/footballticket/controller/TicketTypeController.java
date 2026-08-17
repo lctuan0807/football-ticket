@@ -37,6 +37,7 @@ public class TicketTypeController {
 
   @GetMapping
   public ResponseEntity<List<TicketTypeDTO>> getTicketTypes(@RequestParam(required = false) Long matchId) {
+    log.info("Getting ticket types for match id={}", matchId);
     List<TicketTypeDTO> ticketTypes = ticketTypeService.getAllTicketTypes(matchId);
     return ResponseEntity.ok(ticketTypes);
   }
