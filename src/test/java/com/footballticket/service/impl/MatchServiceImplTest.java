@@ -30,7 +30,7 @@ import com.footballticket.dto.match.MatchDTO;
 import com.footballticket.dto.match.UpdateMatchRequest;
 import com.footballticket.entity.MatchEntity;
 import com.footballticket.enums.MatchStatusEnum;
-import com.footballticket.exceptions.MatchAlreadyExistsException;
+import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.MatchRepository;
 import com.footballticket.service.RedisService;
@@ -98,12 +98,12 @@ class MatchServiceImplTest {
   }
 
   @Test
-  void createMatch_throwsMatchAlreadyExistsException_whenDuplicateMatchExists() {
+  void createMatch_throwsResourceAlreadyExistsException_whenDuplicateMatchExists() {
     given(matchRepository.existsByHomeTeamAndAwayTeamAndSeason(
         request.homeTeam(), request.awayTeam(), request.season())).willReturn(true);
 
     assertThatThrownBy(() -> matchService.createMatch(request))
-        .isInstanceOf(MatchAlreadyExistsException.class)
+        .isInstanceOf(ResourceAlreadyExistsException.class)
         .hasMessage("Match already exists!");
 
     verify(matchRepository, never()).save(any(MatchEntity.class));

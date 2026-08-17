@@ -1,55 +1,53 @@
 package com.footballticket.entity;
 
 import java.time.LocalDateTime;
-import java.util.List;
+
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @Entity
-@Table(name = "matches")
-public class MatchEntity {
+@Table(name = "ticket_types")
+@NoArgsConstructor
+@AllArgsConstructor
+public class TicketTypeEntity {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Column(nullable = false)
-  private String competition;
+  @ManyToOne
+  @JoinColumn(name = "match_id", nullable = false)
+  private MatchEntity match;
 
   @Column(nullable = false)
-  private String stage;
+  private String name;
 
   @Column(nullable = false)
-  private String season;
+  private Integer price;
 
   @Column(nullable = false)
-  private String homeTeam;
+  private Integer quantity;
 
   @Column(nullable = false)
-  private String awayTeam;
+  private Integer availableQuantity;
 
   @Column(nullable = false)
-  private LocalDateTime kickoffAt;
-
-  @Column(nullable = false)
-  private String stadium;
-
-  @Column(nullable = false)
-  private Integer status;
-
-  @Column(nullable = false)
+  @CreationTimestamp
   private LocalDateTime createdAt;
 
   @Column(nullable = false)
+  @UpdateTimestamp
   private LocalDateTime updatedAt;
-
-  @OneToMany(mappedBy = "match")
-  private List<TicketTypeEntity> ticketTypes;
 }
