@@ -3,10 +3,12 @@ package com.footballticket.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,6 +29,7 @@ import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.MatchRepository;
 import com.footballticket.repository.TicketTypeRepository;
+import com.footballticket.service.RedisService;
 
 @ExtendWith(MockitoExtension.class)
 class TicketTypeServiceImplTest {
@@ -40,13 +43,16 @@ class TicketTypeServiceImplTest {
   @Mock
   private ModelMapper modelMapper;
 
+  @Mock
+  private RedisService redisService;
+
   private TicketTypeServiceImpl ticketTypeService;
 
   private final CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", "Best seats", 500, 100);
 
   @BeforeEach
   void setUp() {
-    ticketTypeService = new TicketTypeServiceImpl(ticketTypeRepository, matchRepository, modelMapper);
+    ticketTypeService = new TicketTypeServiceImpl(ticketTypeRepository, matchRepository, modelMapper, redisService);
   }
 
   @Test
@@ -107,7 +113,21 @@ class TicketTypeServiceImplTest {
   }
 
   @Test
-  void getTicketType_returnsDto_whenExists() {
+  void getTicketType_returnsCachedDto_whenPresentInCache() {
+    TicketTypeDTO cachedDto = new TicketTypeDTO();
+    cachedDto.setId(10L);
+    given(redisService.getObject("ticketType:10", TicketTypeDTO.class)).willReturn(cachedDto);
+
+    TicketTypeDTO result = ticketTypeService.getTicketType(10L);
+
+    assertThat(result).isSameAs(cachedDto);
+    verify(ticketTypeRepository, never()).findById(any());
+  }
+
+  @Test
+  void getTicketType_fetchesFromRepositoryAndCachesResult_whenNotInCache() {
+    given(redisService.getObject("ticketType:10", TicketTypeDTO.class)).willReturn(null);
+
     MatchEntity match = new MatchEntity();
     match.setId(1L);
     TicketTypeEntity ticketType = new TicketTypeEntity();
@@ -123,10 +143,12 @@ class TicketTypeServiceImplTest {
 
     assertThat(result).isSameAs(expectedDto);
     assertThat(result.getMatchId()).isEqualTo(1L);
+    verify(redisService).setObject(eq("ticketType:10"), eq(expectedDto), any(Duration.class));
   }
 
   @Test
   void getTicketType_throwsResourceNotFoundException_whenNotExists() {
+    given(redisService.getObject("ticketType:10", TicketTypeDTO.class)).willReturn(null);
     given(ticketTypeRepository.findById(10L)).willReturn(Optional.empty());
 
     assertThatThrownBy(() -> ticketTypeService.getTicketType(10L))
@@ -202,6 +224,7 @@ class TicketTypeServiceImplTest {
     assertThat(persisted.getPrice()).isEqualTo(300);
     assertThat(persisted.getQuantity()).isEqualTo(150);
     assertThat(persisted.getAvailableQuantity()).isEqualTo(90);
+    verify(redisService).delete("ticketType:10");
   }
 
   @Test
@@ -239,9 +262,10 @@ class TicketTypeServiceImplTest {
   }
 
   @Test
-  void deleteTicketType_deletesById() {
+  void deleteTicketType_deletesByIdAndEvictsCache() {
     ticketTypeService.deleteTicketType(10L);
 
     verify(ticketTypeRepository).deleteById(10L);
+    verify(redisService).delete("ticketType:10");
   }
 }

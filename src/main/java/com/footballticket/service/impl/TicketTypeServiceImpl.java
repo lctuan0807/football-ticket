@@ -1,5 +1,6 @@
 package com.footballticket.service.impl;
 
+import java.time.Duration;
 import java.util.List;
 
 import org.modelmapper.ModelMapper;
@@ -14,6 +15,7 @@ import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.MatchRepository;
 import com.footballticket.repository.TicketTypeRepository;
+import com.footballticket.service.RedisService;
 import com.footballticket.service.TicketTypeService;
 
 import lombok.RequiredArgsConstructor;
@@ -23,10 +25,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @RequiredArgsConstructor
 public class TicketTypeServiceImpl implements TicketTypeService {
+  private static final String TICKET_TYPE_CACHE_KEY_PREFIX = "ticketType:";
+  private static final Duration TICKET_TYPE_CACHE_TTL = Duration.ofMinutes(10);
 
   private final TicketTypeRepository ticketTypeRepository;
   private final MatchRepository matchRepository;
   private final ModelMapper modelMapper;
+  private final RedisService redisService;
 
   @Override
   public TicketTypeDTO createTicketType(CreateTicketTypeRequest request) {
@@ -52,9 +57,21 @@ public class TicketTypeServiceImpl implements TicketTypeService {
 
   @Override
   public TicketTypeDTO getTicketType(Long id) {
+    String cacheKey = TICKET_TYPE_CACHE_KEY_PREFIX + id;
+
+    TicketTypeDTO cached = redisService.getObject(cacheKey, TicketTypeDTO.class);
+    if (cached != null) {
+      log.debug("Cache hit for ticket type id={}", id);
+      return cached;
+    }
+
+    log.debug("Cache miss for ticket type id={}", id);
     TicketTypeEntity ticketType = ticketTypeRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Ticket type not found!"));
-    return toDto(ticketType);
+    TicketTypeDTO dto = toDto(ticketType);
+    redisService.setObject(cacheKey, dto, TICKET_TYPE_CACHE_TTL);
+    log.debug("Populated cache for ticket type id={}", id);
+    return dto;
   }
 
   @Override
@@ -79,6 +96,7 @@ public class TicketTypeServiceImpl implements TicketTypeService {
     ticketType.setAvailableQuantity(Math.max(0, request.quantity() - sold));
 
     TicketTypeEntity saved = ticketTypeRepository.save(ticketType);
+    redisService.delete(TICKET_TYPE_CACHE_KEY_PREFIX + id);
     log.info("Ticket type updated: {} (id={})", saved.getName(), saved.getId());
     return toDto(saved);
   }
@@ -86,6 +104,7 @@ public class TicketTypeServiceImpl implements TicketTypeService {
   @Override
   public void deleteTicketType(Long id) {
     ticketTypeRepository.deleteById(id);
+    redisService.delete(TICKET_TYPE_CACHE_KEY_PREFIX + id);
   }
 
   private TicketTypeDTO toDto(TicketTypeEntity entity) {
