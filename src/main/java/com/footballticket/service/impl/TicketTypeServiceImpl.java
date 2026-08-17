@@ -61,16 +61,16 @@ public class TicketTypeServiceImpl implements TicketTypeService {
 
     TicketTypeDTO cached = redisService.getObject(cacheKey, TicketTypeDTO.class);
     if (cached != null) {
-      log.debug("Cache hit for ticket type id={}", id);
+      log.info("Cache hit for ticket type id={}", id);
       return cached;
     }
 
-    log.debug("Cache miss for ticket type id={}", id);
+    log.info("Cache miss for ticket type id={}", id);
     TicketTypeEntity ticketType = ticketTypeRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Ticket type not found!"));
     TicketTypeDTO dto = toDto(ticketType);
     redisService.setObject(cacheKey, dto, TICKET_TYPE_CACHE_TTL);
-    log.debug("Populated cache for ticket type id={}", id);
+    log.info("Populated cache for ticket type id={}", id);
     return dto;
   }
 
