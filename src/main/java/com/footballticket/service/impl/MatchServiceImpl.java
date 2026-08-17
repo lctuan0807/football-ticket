@@ -13,7 +13,7 @@ import com.footballticket.dto.match.MatchDTO;
 import com.footballticket.dto.match.UpdateMatchRequest;
 import com.footballticket.entity.MatchEntity;
 import com.footballticket.enums.MatchStatusEnum;
-import com.footballticket.exceptions.MatchAlreadyExistsException;
+import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.MatchRepository;
 import com.footballticket.service.MatchService;
@@ -54,7 +54,7 @@ public class MatchServiceImpl implements MatchService {
 
     if (matchRepository.existsByHomeTeamAndAwayTeamAndSeason(
         match.getHomeTeam(), match.getAwayTeam(), match.getSeason())) {
-      throw new MatchAlreadyExistsException("Match already exists!");
+      throw new ResourceAlreadyExistsException("Match already exists!");
     }
 
     MatchEntity saved = matchRepository.save(match);
