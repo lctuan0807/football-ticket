@@ -20,6 +20,7 @@ import com.footballticket.dto.reservation.ReservationDTO;
 import com.footballticket.entity.MatchEntity;
 import com.footballticket.entity.TicketTypeEntity;
 import com.footballticket.exceptions.InsufficientTicketException;
+import com.footballticket.exceptions.InvalidReservationStateException;
 import com.footballticket.exceptions.ReservationCreationFailedException;
 import com.footballticket.repository.MatchRepository;
 import com.footballticket.repository.ReservationRepository;
@@ -130,5 +131,44 @@ class ReservationConcurrencyTest {
         .count();
     assertThat(persistedReservations).as("a reservation record must be persisted for each successful call")
         .isEqualTo(successCount.get());
+  }
+
+  @Test
+  void cancelReservation_neverDoubleReleasesStock_underConcurrentCancelRequests() throws InterruptedException {
+    ReservationDTO created = reservationService.createReservation(matchId, ticketTypeId,
+        new CreateReservationRequest(1L, 5));
+    int stockAfterCreate = ticketTypeRepository.getAvailableQuantity(ticketTypeId);
+
+    int concurrentCancelAttempts = 10;
+    ExecutorService executor = Executors.newFixedThreadPool(concurrentCancelAttempts);
+    CountDownLatch startLatch = new CountDownLatch(1);
+    CountDownLatch doneLatch = new CountDownLatch(concurrentCancelAttempts);
+    AtomicInteger successCount = new AtomicInteger();
+
+    for (int i = 0; i < concurrentCancelAttempts; i++) {
+      executor.submit(() -> {
+        try {
+          startLatch.await();
+          reservationService.cancelReservation(created.getId());
+          successCount.incrementAndGet();
+        } catch (InvalidReservationStateException e) {
+          // expected for every loser of the race
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        } finally {
+          doneLatch.countDown();
+        }
+      });
+    }
+
+    startLatch.countDown();
+    boolean completed = doneLatch.await(30, TimeUnit.SECONDS);
+    executor.shutdown();
+
+    assertThat(completed).as("all requests finished before timeout").isTrue();
+    assertThat(successCount.get()).as("exactly one concurrent cancel should win").isEqualTo(1);
+    assertThat(ticketTypeRepository.getAvailableQuantity(ticketTypeId))
+        .as("stock must be released exactly once, not once per attempt")
+        .isEqualTo(stockAfterCreate + 5);
   }
 }

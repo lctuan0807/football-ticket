@@ -30,4 +30,9 @@ public interface TicketTypeRepository extends JpaRepository<TicketTypeEntity, Lo
   // tt.availableQuantity - :quantity WHERE tt.id = :ticketTypeId")
   @Query("UPDATE TicketTypeEntity tt SET tt.availableQuantity = tt.availableQuantity - :quantity WHERE tt.id = :ticketTypeId AND tt.availableQuantity >= :quantity")
   int reserve(@Param("ticketTypeId") Long ticketTypeId, @Param("quantity") int quantity);
+
+  @Modifying
+  @Transactional
+  @Query("UPDATE TicketTypeEntity tt SET tt.availableQuantity = tt.availableQuantity + :quantity WHERE tt.id = :ticketTypeId")
+  int release(@Param("ticketTypeId") Long ticketTypeId, @Param("quantity") int quantity);
 }

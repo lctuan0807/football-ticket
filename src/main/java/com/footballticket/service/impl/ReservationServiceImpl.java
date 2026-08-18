@@ -10,9 +10,12 @@ import org.springframework.transaction.annotation.Transactional;
 import com.footballticket.dto.reservation.CreateReservationRequest;
 import com.footballticket.dto.reservation.ReservationDTO;
 import com.footballticket.entity.ReservationEntity;
+import com.footballticket.entity.TicketTypeEntity;
 import com.footballticket.enums.ReservationStatusEnum;
 import com.footballticket.exceptions.InsufficientTicketException;
+import com.footballticket.exceptions.InvalidReservationStateException;
 import com.footballticket.exceptions.ReservationCreationFailedException;
+import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.ReservationRepository;
 import com.footballticket.repository.TicketTypeRepository;
 import com.footballticket.service.ReservationService;
@@ -84,8 +87,32 @@ public class ReservationServiceImpl implements ReservationService {
   }
 
   @Override
+  @Transactional
   public ReservationDTO cancelReservation(Long id) {
-    throw new UnsupportedOperationException("Unimplemented method 'cancelReservation'");
+    ReservationEntity reservation = reservationRepository.findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("Reservation not found: " + id));
+
+    if (reservation.getStatus() != ReservationStatusEnum.PENDING.toInt()) {
+      throw new InvalidReservationStateException(
+          "Cannot cancel reservation " + id + " in status "
+              + ReservationStatusEnum.values()[reservation.getStatus()].name());
+    }
+
+    int updated = reservationRepository.updateStatusIfCurrentStatus(
+        id, ReservationStatusEnum.PENDING.toInt(), ReservationStatusEnum.CANCELLED.toInt());
+    if (updated == 0) {
+      throw new InvalidReservationStateException(
+          "Reservation " + id + " was already transitioned by a concurrent request");
+    }
+
+    ticketTypeRepository.release(reservation.getTicketTypeId(), reservation.getQuantity());
+
+    TicketTypeEntity ticketType = ticketTypeRepository.findById(reservation.getTicketTypeId())
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "Ticket type not found: " + reservation.getTicketTypeId()));
+
+    reservation.setStatus(ReservationStatusEnum.CANCELLED.toInt());
+    return toDto(reservation, ticketType.getMatch().getId());
   }
 
   private ReservationDTO toDto(ReservationEntity entity, Long matchId) {

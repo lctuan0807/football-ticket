@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,7 +21,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.footballticket.dto.reservation.CreateReservationRequest;
 import com.footballticket.dto.reservation.ReservationDTO;
 import com.footballticket.exceptions.InsufficientTicketException;
+import com.footballticket.exceptions.InvalidReservationStateException;
 import com.footballticket.exceptions.ReservationCreationFailedException;
+import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.service.ReservationService;
 
 import tools.jackson.databind.ObjectMapper;
@@ -149,5 +152,48 @@ class ReservationControllerTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void cancelReservation_returnsCancelledReservation_whenCancellationSucceeds() throws Exception {
+    ReservationDTO response = new ReservationDTO();
+    response.setId(100L);
+    response.setUserId(1L);
+    response.setTicketTypeId(10L);
+    response.setMatchId(1L);
+    response.setQuantity(2);
+    response.setStatus("CANCELLED");
+    response.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+    response.setCreatedAt(LocalDateTime.now());
+
+    given(reservationService.cancelReservation(100L)).willReturn(response);
+
+    mockMvc.perform(patch("/api/v1/reservations/100/cancel"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code", is(200)))
+        .andExpect(jsonPath("$.message", is("Reservation cancelled successfully")))
+        .andExpect(jsonPath("$.data.id", is(100)))
+        .andExpect(jsonPath("$.data.status", is("CANCELLED")));
+  }
+
+  @Test
+  void cancelReservation_returnsNotFound_whenReservationMissing() throws Exception {
+    given(reservationService.cancelReservation(999L))
+        .willThrow(new ResourceNotFoundException("Reservation not found: 999"));
+
+    mockMvc.perform(patch("/api/v1/reservations/999/cancel"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code", is(404)));
+  }
+
+  @Test
+  void cancelReservation_returnsConflict_whenReservationNotPending() throws Exception {
+    given(reservationService.cancelReservation(100L))
+        .willThrow(new InvalidReservationStateException("Cannot cancel reservation 100 in status CONFIRMED"));
+
+    mockMvc.perform(patch("/api/v1/reservations/100/cancel"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code", is(409)))
+        .andExpect(jsonPath("$.message", is("Cannot cancel reservation 100 in status CONFIRMED")));
   }
 }

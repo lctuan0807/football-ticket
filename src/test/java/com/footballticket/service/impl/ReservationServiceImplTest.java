@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,9 +23,14 @@ import org.modelmapper.ModelMapper;
 
 import com.footballticket.dto.reservation.CreateReservationRequest;
 import com.footballticket.dto.reservation.ReservationDTO;
+import com.footballticket.entity.MatchEntity;
 import com.footballticket.entity.ReservationEntity;
+import com.footballticket.entity.TicketTypeEntity;
+import com.footballticket.enums.ReservationStatusEnum;
 import com.footballticket.exceptions.InsufficientTicketException;
+import com.footballticket.exceptions.InvalidReservationStateException;
 import com.footballticket.exceptions.ReservationCreationFailedException;
+import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.ReservationRepository;
 import com.footballticket.repository.TicketTypeRepository;
 
@@ -112,5 +119,108 @@ class ReservationServiceImplTest {
         .isInstanceOf(ReservationCreationFailedException.class);
 
     verify(reservationRepository, never()).save(any(ReservationEntity.class));
+  }
+
+  @Test
+  void cancelReservation_releasesStockAndReturnsCancelledDto_whenReservationIsPending() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setUserId(1L);
+    reservation.setTicketTypeId(10L);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    reservation.setQuantity(3);
+    reservation.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(reservationRepository.updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.CANCELLED.toInt())).willReturn(1);
+
+    MatchEntity match = new MatchEntity();
+    match.setId(1L);
+    TicketTypeEntity ticketType = new TicketTypeEntity();
+    ticketType.setId(10L);
+    ticketType.setMatch(match);
+    given(ticketTypeRepository.findById(10L)).willReturn(Optional.of(ticketType));
+
+    ReservationDTO result = reservationService.cancelReservation(100L);
+
+    assertThat(result.getId()).isEqualTo(100L);
+    assertThat(result.getMatchId()).isEqualTo(1L);
+    assertThat(result.getStatus()).isEqualTo("CANCELLED");
+
+    ArgumentCaptor<Long> ticketTypeIdCaptor = ArgumentCaptor.forClass(Long.class);
+    ArgumentCaptor<Integer> quantityCaptor = ArgumentCaptor.forClass(Integer.class);
+    verify(ticketTypeRepository).release(ticketTypeIdCaptor.capture(), quantityCaptor.capture());
+    assertThat(ticketTypeIdCaptor.getValue()).isEqualTo(10L);
+    assertThat(quantityCaptor.getValue()).isEqualTo(3);
+  }
+
+  @Test
+  void cancelReservation_throwsResourceNotFoundException_whenReservationMissing() {
+    given(reservationRepository.findById(999L)).willReturn(Optional.empty());
+
+    assertThatThrownBy(() -> reservationService.cancelReservation(999L))
+        .isInstanceOf(ResourceNotFoundException.class);
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void cancelReservation_throwsInvalidReservationStateException_whenAlreadyConfirmed() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setStatus(ReservationStatusEnum.CONFIRMED.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+
+    assertThatThrownBy(() -> reservationService.cancelReservation(100L))
+        .isInstanceOf(InvalidReservationStateException.class)
+        .hasMessageContaining("CONFIRMED");
+
+    verify(reservationRepository, never()).updateStatusIfCurrentStatus(any(), any(), any());
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void cancelReservation_throwsInvalidReservationStateException_whenAlreadyCancelled() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setStatus(ReservationStatusEnum.CANCELLED.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+
+    assertThatThrownBy(() -> reservationService.cancelReservation(100L))
+        .isInstanceOf(InvalidReservationStateException.class)
+        .hasMessageContaining("CANCELLED");
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void cancelReservation_throwsInvalidReservationStateException_whenExpired() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setStatus(ReservationStatusEnum.EXPIRED.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+
+    assertThatThrownBy(() -> reservationService.cancelReservation(100L))
+        .isInstanceOf(InvalidReservationStateException.class)
+        .hasMessageContaining("EXPIRED");
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void cancelReservation_throwsInvalidReservationStateException_whenConcurrentTransitionLosesRace() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setTicketTypeId(10L);
+    reservation.setQuantity(3);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(reservationRepository.updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.CANCELLED.toInt())).willReturn(0);
+
+    assertThatThrownBy(() -> reservationService.cancelReservation(100L))
+        .isInstanceOf(InvalidReservationStateException.class);
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
   }
 }
