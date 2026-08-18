@@ -4,7 +4,6 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -45,7 +44,7 @@ class TicketTypeControllerTest {
 
   @Test
   void createTicketType_returnsCreatedTicketType_whenRequestIsValid() throws Exception {
-    CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", "Best seats", 500, 100);
+    CreateTicketTypeRequest request = new CreateTicketTypeRequest("VIP", "Best seats", 500, 100);
     TicketTypeDTO response = new TicketTypeDTO();
     response.setId(1L);
     response.setMatchId(1L);
@@ -55,9 +54,9 @@ class TicketTypeControllerTest {
     response.setQuantity(100);
     response.setAvailableQuantity(100);
 
-    given(ticketTypeService.createTicketType(any(CreateTicketTypeRequest.class))).willReturn(response);
+    given(ticketTypeService.createTicketType(eq(1L), any(CreateTicketTypeRequest.class))).willReturn(response);
 
-    mockMvc.perform(post("/api/v1/ticket-types")
+    mockMvc.perform(post("/api/v1/matches/1/ticket-types")
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isOk())
@@ -71,13 +70,12 @@ class TicketTypeControllerTest {
   void createTicketType_returnsBadRequest_whenRequiredFieldIsMissing() throws Exception {
     String requestJson = """
         {
-          "name": "VIP",
           "price": 500,
           "quantity": 100
         }
         """;
 
-    mockMvc.perform(post("/api/v1/ticket-types")
+    mockMvc.perform(post("/api/v1/matches/1/ticket-types")
         .contentType(MediaType.APPLICATION_JSON)
         .content(requestJson))
         .andExpect(status().isBadRequest());
@@ -85,12 +83,12 @@ class TicketTypeControllerTest {
 
   @Test
   void createTicketType_returnsNotFound_whenMatchDoesNotExist() throws Exception {
-    CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", "Best seats", 500, 100);
+    CreateTicketTypeRequest request = new CreateTicketTypeRequest("VIP", "Best seats", 500, 100);
 
-    given(ticketTypeService.createTicketType(any(CreateTicketTypeRequest.class)))
+    given(ticketTypeService.createTicketType(eq(1L), any(CreateTicketTypeRequest.class)))
         .willThrow(new ResourceNotFoundException("Match not found!"));
 
-    mockMvc.perform(post("/api/v1/ticket-types")
+    mockMvc.perform(post("/api/v1/matches/1/ticket-types")
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isNotFound())
@@ -100,12 +98,12 @@ class TicketTypeControllerTest {
 
   @Test
   void createTicketType_returnsConflict_whenDuplicateName() throws Exception {
-    CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", "Best seats", 500, 100);
+    CreateTicketTypeRequest request = new CreateTicketTypeRequest("VIP", "Best seats", 500, 100);
 
-    given(ticketTypeService.createTicketType(any(CreateTicketTypeRequest.class)))
+    given(ticketTypeService.createTicketType(eq(1L), any(CreateTicketTypeRequest.class)))
         .willThrow(new ResourceAlreadyExistsException("Ticket type already exists for this match!"));
 
-    mockMvc.perform(post("/api/v1/ticket-types")
+    mockMvc.perform(post("/api/v1/matches/1/ticket-types")
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isConflict())
@@ -124,9 +122,9 @@ class TicketTypeControllerTest {
     response.setQuantity(100);
     response.setAvailableQuantity(100);
 
-    given(ticketTypeService.getTicketType(1L)).willReturn(response);
+    given(ticketTypeService.getTicketType(1L, 1L)).willReturn(response);
 
-    mockMvc.perform(get("/api/v1/ticket-types/1"))
+    mockMvc.perform(get("/api/v1/matches/1/ticket-types/1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.id", is(1)))
         .andExpect(jsonPath("$.data.name", is("VIP")));
@@ -134,34 +132,28 @@ class TicketTypeControllerTest {
 
   @Test
   void getTicketType_returnsNotFound_whenNotExists() throws Exception {
-    given(ticketTypeService.getTicketType(1L)).willThrow(new ResourceNotFoundException("Ticket type not found!"));
+    given(ticketTypeService.getTicketType(1L, 1L))
+        .willThrow(new ResourceNotFoundException("Ticket type not found!"));
 
-    mockMvc.perform(get("/api/v1/ticket-types/1"))
+    mockMvc.perform(get("/api/v1/matches/1/ticket-types/1"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code", is(404)))
         .andExpect(jsonPath("$.message", is("Ticket type not found!")));
   }
 
   @Test
-  void getTicketTypes_returnsAllResults_whenMatchIdNotProvided() throws Exception {
-    TicketTypeDTO ticketType = new TicketTypeDTO();
-    ticketType.setId(1L);
-    ticketType.setMatchId(1L);
-    ticketType.setName("VIP");
-    ticketType.setDescription("Best seats");
-    ticketType.setPrice(500);
-    ticketType.setQuantity(100);
-    ticketType.setAvailableQuantity(100);
-    given(ticketTypeService.getAllTicketTypes(isNull())).willReturn(List.of(ticketType));
+  void getTicketType_returnsNotFound_whenTicketTypeBelongsToDifferentMatch() throws Exception {
+    given(ticketTypeService.getTicketType(2L, 1L))
+        .willThrow(new ResourceNotFoundException("Ticket type not found!"));
 
-    mockMvc.perform(get("/api/v1/ticket-types"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data", hasSize(1)))
-        .andExpect(jsonPath("$.data[0].id", is(1)));
+    mockMvc.perform(get("/api/v1/matches/2/ticket-types/1"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code", is(404)))
+        .andExpect(jsonPath("$.message", is("Ticket type not found!")));
   }
 
   @Test
-  void getTicketTypes_returnsFilteredResults_whenMatchIdProvided() throws Exception {
+  void getTicketTypes_returnsResultsForMatch() throws Exception {
     TicketTypeDTO ticketType = new TicketTypeDTO();
     ticketType.setId(1L);
     ticketType.setMatchId(1L);
@@ -170,10 +162,11 @@ class TicketTypeControllerTest {
     ticketType.setPrice(500);
     ticketType.setQuantity(100);
     ticketType.setAvailableQuantity(100);
-    given(ticketTypeService.getAllTicketTypes(eq(1L))).willReturn(List.of(ticketType));
+    given(ticketTypeService.getAllTicketTypes(1L)).willReturn(List.of(ticketType));
 
-    mockMvc.perform(get("/api/v1/ticket-types").param("matchId", "1"))
+    mockMvc.perform(get("/api/v1/matches/1/ticket-types"))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data", hasSize(1)))
         .andExpect(jsonPath("$.data[0].id", is(1)));
   }
 
@@ -189,9 +182,10 @@ class TicketTypeControllerTest {
     response.setQuantity(150);
     response.setAvailableQuantity(150);
 
-    given(ticketTypeService.updateTicketType(eq(1L), any(UpdateTicketTypeRequest.class))).willReturn(response);
+    given(ticketTypeService.updateTicketType(eq(1L), eq(1L), any(UpdateTicketTypeRequest.class)))
+        .willReturn(response);
 
-    mockMvc.perform(put("/api/v1/ticket-types/1")
+    mockMvc.perform(put("/api/v1/matches/1/ticket-types/1")
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isOk())
@@ -203,10 +197,25 @@ class TicketTypeControllerTest {
   void updateTicketType_returnsNotFound_whenNotExists() throws Exception {
     UpdateTicketTypeRequest request = new UpdateTicketTypeRequest("Category 1", "Mid-tier seats", 300, 150);
 
-    given(ticketTypeService.updateTicketType(eq(1L), any(UpdateTicketTypeRequest.class)))
+    given(ticketTypeService.updateTicketType(eq(1L), eq(1L), any(UpdateTicketTypeRequest.class)))
         .willThrow(new ResourceNotFoundException("Ticket type not found!"));
 
-    mockMvc.perform(put("/api/v1/ticket-types/1")
+    mockMvc.perform(put("/api/v1/matches/1/ticket-types/1")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code", is(404)))
+        .andExpect(jsonPath("$.message", is("Ticket type not found!")));
+  }
+
+  @Test
+  void updateTicketType_returnsNotFound_whenTicketTypeBelongsToDifferentMatch() throws Exception {
+    UpdateTicketTypeRequest request = new UpdateTicketTypeRequest("Category 1", "Mid-tier seats", 300, 150);
+
+    given(ticketTypeService.updateTicketType(eq(2L), eq(1L), any(UpdateTicketTypeRequest.class)))
+        .willThrow(new ResourceNotFoundException("Ticket type not found!"));
+
+    mockMvc.perform(put("/api/v1/matches/2/ticket-types/1")
         .contentType(MediaType.APPLICATION_JSON)
         .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isNotFound())
@@ -216,7 +225,18 @@ class TicketTypeControllerTest {
 
   @Test
   void deleteTicketType_returnsNoContent() throws Exception {
-    mockMvc.perform(delete("/api/v1/ticket-types/1"))
+    mockMvc.perform(delete("/api/v1/matches/1/ticket-types/1"))
         .andExpect(status().isNoContent());
+  }
+
+  @Test
+  void deleteTicketType_returnsNotFound_whenTicketTypeBelongsToDifferentMatch() throws Exception {
+    org.mockito.BDDMockito.willThrow(new ResourceNotFoundException("Ticket type not found!"))
+        .given(ticketTypeService).deleteTicketType(2L, 1L);
+
+    mockMvc.perform(delete("/api/v1/matches/2/ticket-types/1"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code", is(404)))
+        .andExpect(jsonPath("$.message", is("Ticket type not found!")));
   }
 }

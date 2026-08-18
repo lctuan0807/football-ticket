@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Simulates a cache stampede against GET /api/v1/ticket-types/{id}:
+# Simulates a cache stampede against GET /api/v1/matches/{matchId}/ticket-types/{id}:
 #   1. Deletes the Redis key so the next requests find a cold cache
 #      (like right after the 10-minute TTL expires).
 #   2. Fires VUS concurrent requests at that id via k6.
@@ -10,13 +10,14 @@
 #   mvn spring-boot:run | tee /tmp/footballticket-app.log
 #
 # Usage:
-#   TICKET_TYPE_ID=3 ./loadtest/run-stampede-test.sh
-#   TICKET_TYPE_ID=3 VUS=200 ./loadtest/run-stampede-test.sh
+#   TICKET_TYPE_ID=3 MATCH_ID=1 ./loadtest/run-stampede-test.sh
+#   TICKET_TYPE_ID=3 MATCH_ID=1 VUS=200 ./loadtest/run-stampede-test.sh
 
 set -euo pipefail
 
 : "${TICKET_TYPE_ID:?Set TICKET_TYPE_ID to an existing ticket type id}"
 BASE_URL="${BASE_URL:-http://localhost:8080}"
+MATCH_ID="${MATCH_ID:-1}"
 VUS="${VUS:-50}"
 REDIS_HOST="${REDIS_HOST:-localhost}"
 REDIS_PORT="${REDIS_PORT:-6389}"
@@ -33,9 +34,10 @@ redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" DEL "ticketType:$TICKET_TYPE_ID" >/d
 
 BASELINE_LINES=$(wc -l < "$LOG_FILE")
 
-echo "Firing $VUS concurrent requests at $BASE_URL/api/v1/ticket-types/$TICKET_TYPE_ID..."
+echo "Firing $VUS concurrent requests at $BASE_URL/api/v1/matches/$MATCH_ID/ticket-types/$TICKET_TYPE_ID..."
 k6 run \
   -e BASE_URL="$BASE_URL" \
+  -e MATCH_ID="$MATCH_ID" \
   -e TICKET_TYPE_ID="$TICKET_TYPE_ID" \
   -e VUS="$VUS" \
   "$SCRIPT_DIR/ticket-type-stampede.js"

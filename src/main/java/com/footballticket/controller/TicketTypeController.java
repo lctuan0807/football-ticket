@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.footballticket.common.ApiResponse;
@@ -25,42 +24,42 @@ import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/ticket-types")
+@RequestMapping("/api/v1/matches/{matchId}/ticket-types")
 @Slf4j
 public class TicketTypeController {
   private final TicketTypeService ticketTypeService;
 
   @PostMapping
-  public ResponseEntity<ApiResponse<TicketTypeDTO>> createTicketType(
+  public ResponseEntity<ApiResponse<TicketTypeDTO>> createTicketType(@PathVariable Long matchId,
       @RequestBody @Valid CreateTicketTypeRequest request) {
-    TicketTypeDTO ticketType = ticketTypeService.createTicketType(request);
+    TicketTypeDTO ticketType = ticketTypeService.createTicketType(matchId, request);
     return ResponseEntity.ok(ApiResponse.success("Ticket type created successfully", ticketType));
   }
 
   @GetMapping
-  public ResponseEntity<ApiResponse<List<TicketTypeDTO>>> getTicketTypes(
-      @RequestParam(required = false) Long matchId) {
+  public ResponseEntity<ApiResponse<List<TicketTypeDTO>>> getTicketTypes(@PathVariable Long matchId) {
     log.info("Getting ticket types for match id={}", matchId);
     List<TicketTypeDTO> ticketTypes = ticketTypeService.getAllTicketTypes(matchId);
     return ResponseEntity.ok(ApiResponse.success(ticketTypes));
   }
 
   @GetMapping("/{id}")
-  public ResponseEntity<ApiResponse<TicketTypeDTO>> getTicketType(@PathVariable Long id) {
-    TicketTypeDTO ticketType = ticketTypeService.getTicketType(id);
+  public ResponseEntity<ApiResponse<TicketTypeDTO>> getTicketType(@PathVariable Long matchId,
+      @PathVariable Long id) {
+    TicketTypeDTO ticketType = ticketTypeService.getTicketType(matchId, id);
     return ResponseEntity.ok(ApiResponse.success(ticketType));
   }
 
   @PutMapping("/{id}")
-  public ResponseEntity<ApiResponse<TicketTypeDTO>> updateTicketType(@PathVariable Long id,
-      @RequestBody @Valid UpdateTicketTypeRequest request) {
-    TicketTypeDTO ticketType = ticketTypeService.updateTicketType(id, request);
+  public ResponseEntity<ApiResponse<TicketTypeDTO>> updateTicketType(@PathVariable Long matchId,
+      @PathVariable Long id, @RequestBody @Valid UpdateTicketTypeRequest request) {
+    TicketTypeDTO ticketType = ticketTypeService.updateTicketType(matchId, id, request);
     return ResponseEntity.ok(ApiResponse.success("Ticket type updated successfully", ticketType));
   }
 
   @DeleteMapping("/{id}")
-  public ResponseEntity<Void> deleteTicketType(@PathVariable Long id) {
-    ticketTypeService.deleteTicketType(id);
+  public ResponseEntity<Void> deleteTicketType(@PathVariable Long matchId, @PathVariable Long id) {
+    ticketTypeService.deleteTicketType(matchId, id);
     return ResponseEntity.noContent().build();
   }
 }

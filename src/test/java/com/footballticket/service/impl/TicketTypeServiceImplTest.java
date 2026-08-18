@@ -46,7 +46,7 @@ class TicketTypeServiceImplTest {
 
   private TicketTypeServiceImpl ticketTypeService;
 
-  private final CreateTicketTypeRequest request = new CreateTicketTypeRequest(1L, "VIP", "Best seats", 500, 100);
+  private final CreateTicketTypeRequest request = new CreateTicketTypeRequest("VIP", "Best seats", 500, 100);
 
   @BeforeEach
   void setUp() {
@@ -59,7 +59,7 @@ class TicketTypeServiceImplTest {
     MatchEntity match = new MatchEntity();
     match.setId(1L);
     given(matchRepository.findById(1L)).willReturn(Optional.of(match));
-    given(ticketTypeRepository.existsByMatch_IdAndName(1L, "VIP")).willReturn(false);
+    given(ticketTypeRepository.existsByMatchIdAndName(1L, "VIP")).willReturn(false);
 
     TicketTypeEntity saved = new TicketTypeEntity();
     saved.setId(10L);
@@ -70,7 +70,7 @@ class TicketTypeServiceImplTest {
     expectedDto.setId(10L);
     given(modelMapper.map(saved, TicketTypeDTO.class)).willReturn(expectedDto);
 
-    TicketTypeDTO result = ticketTypeService.createTicketType(request);
+    TicketTypeDTO result = ticketTypeService.createTicketType(1L, request);
 
     assertThat(result).isSameAs(expectedDto);
     assertThat(result.getMatchId()).isEqualTo(1L);
@@ -90,7 +90,7 @@ class TicketTypeServiceImplTest {
   void createTicketType_throwsResourceNotFoundException_whenMatchDoesNotExist() {
     given(matchRepository.findById(1L)).willReturn(Optional.empty());
 
-    assertThatThrownBy(() -> ticketTypeService.createTicketType(request))
+    assertThatThrownBy(() -> ticketTypeService.createTicketType(1L, request))
         .isInstanceOf(ResourceNotFoundException.class)
         .hasMessage("Match not found!");
 
@@ -102,9 +102,9 @@ class TicketTypeServiceImplTest {
     MatchEntity match = new MatchEntity();
     match.setId(1L);
     given(matchRepository.findById(1L)).willReturn(Optional.of(match));
-    given(ticketTypeRepository.existsByMatch_IdAndName(1L, "VIP")).willReturn(true);
+    given(ticketTypeRepository.existsByMatchIdAndName(1L, "VIP")).willReturn(true);
 
-    assertThatThrownBy(() -> ticketTypeService.createTicketType(request))
+    assertThatThrownBy(() -> ticketTypeService.createTicketType(1L, request))
         .isInstanceOf(ResourceAlreadyExistsException.class)
         .hasMessage("Ticket type already exists for this match!");
 
@@ -115,9 +115,10 @@ class TicketTypeServiceImplTest {
   void getTicketType_delegatesToCacheService() {
     TicketTypeDTO dto = new TicketTypeDTO();
     dto.setId(10L);
+    dto.setMatchId(1L);
     given(ticketTypeCacheService.getTicketType(10L)).willReturn(dto);
 
-    TicketTypeDTO result = ticketTypeService.getTicketType(10L);
+    TicketTypeDTO result = ticketTypeService.getTicketType(1L, 10L);
 
     assertThat(result).isSameAs(dto);
   }
@@ -127,28 +128,21 @@ class TicketTypeServiceImplTest {
     given(ticketTypeCacheService.getTicketType(10L))
         .willThrow(new ResourceNotFoundException("Ticket type not found!"));
 
-    assertThatThrownBy(() -> ticketTypeService.getTicketType(10L))
+    assertThatThrownBy(() -> ticketTypeService.getTicketType(1L, 10L))
         .isInstanceOf(ResourceNotFoundException.class)
         .hasMessage("Ticket type not found!");
   }
 
   @Test
-  void getAllTicketTypes_returnsAll_whenMatchIdIsNull() {
-    MatchEntity match = new MatchEntity();
-    match.setId(1L);
-    TicketTypeEntity ticketType = new TicketTypeEntity();
-    ticketType.setId(10L);
-    ticketType.setMatch(match);
-    given(ticketTypeRepository.findAll()).willReturn(List.of(ticketType));
+  void getTicketType_throwsResourceNotFoundException_whenTicketTypeBelongsToDifferentMatch() {
+    TicketTypeDTO dto = new TicketTypeDTO();
+    dto.setId(10L);
+    dto.setMatchId(2L);
+    given(ticketTypeCacheService.getTicketType(10L)).willReturn(dto);
 
-    TicketTypeDTO expectedDto = new TicketTypeDTO();
-    expectedDto.setId(10L);
-    given(modelMapper.map(ticketType, TicketTypeDTO.class)).willReturn(expectedDto);
-
-    List<TicketTypeDTO> result = ticketTypeService.getAllTicketTypes(null);
-
-    assertThat(result).containsExactly(expectedDto);
-    verify(ticketTypeRepository, never()).findByMatchId(any());
+    assertThatThrownBy(() -> ticketTypeService.getTicketType(1L, 10L))
+        .isInstanceOf(ResourceNotFoundException.class)
+        .hasMessage("Ticket type not found!");
   }
 
   @Test
@@ -179,7 +173,7 @@ class TicketTypeServiceImplTest {
     existing.setMatch(match);
     existing.setQuantity(100);
     existing.setAvailableQuantity(40);
-    given(ticketTypeRepository.findById(10L)).willReturn(Optional.of(existing));
+    given(ticketTypeRepository.findByIdAndMatchId(10L, 1L)).willReturn(Optional.of(existing));
     given(ticketTypeRepository.save(any(TicketTypeEntity.class))).willReturn(existing);
 
     TicketTypeDTO expectedDto = new TicketTypeDTO();
@@ -187,7 +181,7 @@ class TicketTypeServiceImplTest {
     given(modelMapper.map(existing, TicketTypeDTO.class)).willReturn(expectedDto);
 
     UpdateTicketTypeRequest updateRequest = new UpdateTicketTypeRequest("Category 1", "Mid-tier seats", 300, 150);
-    TicketTypeDTO result = ticketTypeService.updateTicketType(10L, updateRequest);
+    TicketTypeDTO result = ticketTypeService.updateTicketType(1L, 10L, updateRequest);
 
     assertThat(result).isSameAs(expectedDto);
     assertThat(result.getMatchId()).isEqualTo(1L);
@@ -212,12 +206,12 @@ class TicketTypeServiceImplTest {
     existing.setMatch(match);
     existing.setQuantity(100);
     existing.setAvailableQuantity(10);
-    given(ticketTypeRepository.findById(10L)).willReturn(Optional.of(existing));
+    given(ticketTypeRepository.findByIdAndMatchId(10L, 1L)).willReturn(Optional.of(existing));
     given(ticketTypeRepository.save(any(TicketTypeEntity.class))).willReturn(existing);
     given(modelMapper.map(existing, TicketTypeDTO.class)).willReturn(new TicketTypeDTO());
 
     UpdateTicketTypeRequest updateRequest = new UpdateTicketTypeRequest("VIP", null, 500, 50);
-    ticketTypeService.updateTicketType(10L, updateRequest);
+    ticketTypeService.updateTicketType(1L, 10L, updateRequest);
 
     ArgumentCaptor<TicketTypeEntity> captor = ArgumentCaptor.forClass(TicketTypeEntity.class);
     verify(ticketTypeRepository).save(captor.capture());
@@ -226,11 +220,11 @@ class TicketTypeServiceImplTest {
 
   @Test
   void updateTicketType_throwsResourceNotFoundException_whenNotExists() {
-    given(ticketTypeRepository.findById(10L)).willReturn(Optional.empty());
+    given(ticketTypeRepository.findByIdAndMatchId(10L, 1L)).willReturn(Optional.empty());
 
     UpdateTicketTypeRequest updateRequest = new UpdateTicketTypeRequest("VIP", null, 500, 50);
 
-    assertThatThrownBy(() -> ticketTypeService.updateTicketType(10L, updateRequest))
+    assertThatThrownBy(() -> ticketTypeService.updateTicketType(1L, 10L, updateRequest))
         .isInstanceOf(ResourceNotFoundException.class)
         .hasMessage("Ticket type not found!");
 
@@ -238,10 +232,42 @@ class TicketTypeServiceImplTest {
   }
 
   @Test
-  void deleteTicketType_deletesByIdAndEvictsCache() {
-    ticketTypeService.deleteTicketType(10L);
+  void updateTicketType_throwsResourceNotFoundException_whenTicketTypeBelongsToDifferentMatch() {
+    given(ticketTypeRepository.findByIdAndMatchId(10L, 2L)).willReturn(Optional.empty());
+
+    UpdateTicketTypeRequest updateRequest = new UpdateTicketTypeRequest("VIP", null, 500, 50);
+
+    assertThatThrownBy(() -> ticketTypeService.updateTicketType(2L, 10L, updateRequest))
+        .isInstanceOf(ResourceNotFoundException.class)
+        .hasMessage("Ticket type not found!");
+
+    verify(ticketTypeRepository, never()).save(any(TicketTypeEntity.class));
+  }
+
+  @Test
+  void deleteTicketType_deletesByIdAndEvictsCache_whenOwnedByMatch() {
+    MatchEntity match = new MatchEntity();
+    match.setId(1L);
+    TicketTypeEntity existing = new TicketTypeEntity();
+    existing.setId(10L);
+    existing.setMatch(match);
+    given(ticketTypeRepository.findByIdAndMatchId(10L, 1L)).willReturn(Optional.of(existing));
+
+    ticketTypeService.deleteTicketType(1L, 10L);
 
     verify(ticketTypeRepository).deleteById(10L);
     verify(ticketTypeCacheService).deleteTicketTypeFromCache(10L);
+  }
+
+  @Test
+  void deleteTicketType_throwsResourceNotFoundException_whenTicketTypeBelongsToDifferentMatch() {
+    given(ticketTypeRepository.findByIdAndMatchId(10L, 2L)).willReturn(Optional.empty());
+
+    assertThatThrownBy(() -> ticketTypeService.deleteTicketType(2L, 10L))
+        .isInstanceOf(ResourceNotFoundException.class)
+        .hasMessage("Ticket type not found!");
+
+    verify(ticketTypeRepository, never()).deleteById(any());
+    verify(ticketTypeCacheService, never()).deleteTicketTypeFromCache(any());
   }
 }

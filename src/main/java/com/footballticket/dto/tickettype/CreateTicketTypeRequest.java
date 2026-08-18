@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 public record CreateTicketTypeRequest(
-        @NotNull Long matchId,
         @NotBlank String name,
         String description,
         @NotNull @Positive Integer price,

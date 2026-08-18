@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Simulates cache penetration against GET /api/v1/ticket-types/{id}:
+# Simulates cache penetration against GET /api/v1/matches/{matchId}/ticket-types/{id}:
 # sustained traffic against ids that never exist, so they never get
 # cached and every request round-trips to Postgres. No Redis flush is
 # needed here (there's nothing to flush) — that's the point: this never
@@ -10,11 +10,12 @@
 #
 # Usage:
 #   ./loadtest/run-penetration-test.sh
-#   VUS=50 DURATION=30s ./loadtest/run-penetration-test.sh
+#   MATCH_ID=1 VUS=50 DURATION=30s ./loadtest/run-penetration-test.sh
 
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
+MATCH_ID="${MATCH_ID:-1}"
 VUS="${VUS:-20}"
 DURATION="${DURATION:-20s}"
 LOG_FILE="${LOG_FILE:-/tmp/footballticket-app.log}"
@@ -29,6 +30,7 @@ BASELINE_LINES=$(wc -l < "$LOG_FILE")
 echo "Running $VUS VUs for $DURATION against random non-existent ticket-type ids..."
 k6 run \
   -e BASE_URL="$BASE_URL" \
+  -e MATCH_ID="$MATCH_ID" \
   -e VUS="$VUS" \
   -e DURATION="$DURATION" \
   "$SCRIPT_DIR/ticket-type-penetration.js"

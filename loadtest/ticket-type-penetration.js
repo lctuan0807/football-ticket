@@ -9,9 +9,10 @@ import { check } from 'k6';
 // the first request.
 //
 // Usage:
-//   k6 run -e VUS=20 -e DURATION=20s loadtest/ticket-type-penetration.js
+//   k6 run -e MATCH_ID=1 -e VUS=20 -e DURATION=20s loadtest/ticket-type-penetration.js
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
+const MATCH_ID = __ENV.MATCH_ID || '1';
 const VUS = parseInt(__ENV.VUS || '20', 10);
 const DURATION = __ENV.DURATION || '20s';
 // Ids picked from this range are assumed to never exist in the DB.
@@ -30,7 +31,7 @@ export const options = {
 
 export default function () {
   const id = Math.floor(Math.random() * (MAX_INVALID_ID - MIN_INVALID_ID + 1)) + MIN_INVALID_ID;
-  const res = http.get(`${BASE_URL}/api/v1/ticket-types/${id}`);
+  const res = http.get(`${BASE_URL}/api/v1/matches/${MATCH_ID}/ticket-types/${id}`);
   check(res, {
     'status is 404': (r) => r.status === 404,
   });

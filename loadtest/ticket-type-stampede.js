@@ -6,12 +6,13 @@ import { check } from 'k6';
 // burst against a cold `ticketType:{id}` Redis key.
 //
 // Usage:
-//   k6 run -e TICKET_TYPE_ID=3 -e VUS=50 loadtest/ticket-type-stampede.js
+//   k6 run -e MATCH_ID=1 -e TICKET_TYPE_ID=3 -e VUS=50 loadtest/ticket-type-stampede.js
 //
 // Point TICKET_TYPE_ID at a non-existent id to instead demonstrate cache
 // penetration (every request bypasses the cache and hits Postgres).
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
+const MATCH_ID = __ENV.MATCH_ID || '1';
 const TICKET_TYPE_ID = __ENV.TICKET_TYPE_ID || '1';
 const VUS = parseInt(__ENV.VUS || '50', 10);
 
@@ -27,7 +28,7 @@ export const options = {
 };
 
 export default function () {
-  const res = http.get(`${BASE_URL}/api/v1/ticket-types/${TICKET_TYPE_ID}`);
+  const res = http.get(`${BASE_URL}/api/v1/matches/${MATCH_ID}/ticket-types/${TICKET_TYPE_ID}`);
   check(res, {
     'status is 200 or 404': (r) => r.status === 200 || r.status === 404,
   });

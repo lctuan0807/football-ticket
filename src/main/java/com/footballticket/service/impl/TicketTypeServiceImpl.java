@@ -30,11 +30,11 @@ public class TicketTypeServiceImpl implements TicketTypeService {
   private final TicketTypeCacheService ticketTypeCacheService;
 
   @Override
-  public TicketTypeDTO createTicketType(CreateTicketTypeRequest request) {
-    MatchEntity match = matchRepository.findById(request.matchId())
+  public TicketTypeDTO createTicketType(Long matchId, CreateTicketTypeRequest request) {
+    MatchEntity match = matchRepository.findById(matchId)
         .orElseThrow(() -> new ResourceNotFoundException("Match not found!"));
 
-    if (ticketTypeRepository.existsByMatch_IdAndName(request.matchId(), request.name())) {
+    if (ticketTypeRepository.existsByMatchIdAndName(matchId, request.name())) {
       throw new ResourceAlreadyExistsException("Ticket type already exists for this match!");
     }
 
@@ -52,22 +52,24 @@ public class TicketTypeServiceImpl implements TicketTypeService {
   }
 
   @Override
-  public TicketTypeDTO getTicketType(Long id) {
-    return ticketTypeCacheService.getTicketType(id);
+  public TicketTypeDTO getTicketType(Long matchId, Long id) {
+    TicketTypeDTO ticketType = ticketTypeCacheService.getTicketType(id);
+    if (!ticketType.getMatchId().equals(matchId)) {
+      throw new ResourceNotFoundException("Ticket type not found!");
+    }
+    return ticketType;
   }
 
   @Override
   public List<TicketTypeDTO> getAllTicketTypes(Long matchId) {
     log.info("Getting all ticket types for match id={}", matchId);
-    List<TicketTypeEntity> ticketTypes = matchId != null
-        ? ticketTypeRepository.findByMatchId(matchId)
-        : ticketTypeRepository.findAll();
+    List<TicketTypeEntity> ticketTypes = ticketTypeRepository.findByMatchId(matchId);
     return ticketTypes.stream().map(this::toDto).toList();
   }
 
   @Override
-  public TicketTypeDTO updateTicketType(Long id, UpdateTicketTypeRequest request) {
-    TicketTypeEntity ticketType = ticketTypeRepository.findById(id)
+  public TicketTypeDTO updateTicketType(Long matchId, Long id, UpdateTicketTypeRequest request) {
+    TicketTypeEntity ticketType = ticketTypeRepository.findByIdAndMatchId(id, matchId)
         .orElseThrow(() -> new ResourceNotFoundException("Ticket type not found!"));
 
     int sold = ticketType.getQuantity() - ticketType.getAvailableQuantity();
@@ -84,7 +86,9 @@ public class TicketTypeServiceImpl implements TicketTypeService {
   }
 
   @Override
-  public void deleteTicketType(Long id) {
+  public void deleteTicketType(Long matchId, Long id) {
+    ticketTypeRepository.findByIdAndMatchId(id, matchId)
+        .orElseThrow(() -> new ResourceNotFoundException("Ticket type not found!"));
     ticketTypeRepository.deleteById(id);
     ticketTypeCacheService.deleteTicketTypeFromCache(id);
   }

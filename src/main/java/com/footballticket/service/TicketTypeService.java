@@ -7,13 +7,13 @@ import com.footballticket.dto.tickettype.TicketTypeDTO;
 import com.footballticket.dto.tickettype.UpdateTicketTypeRequest;
 
 public interface TicketTypeService {
-  TicketTypeDTO createTicketType(CreateTicketTypeRequest request);
+  TicketTypeDTO createTicketType(Long matchId, CreateTicketTypeRequest request);
 
-  TicketTypeDTO getTicketType(Long id);
+  TicketTypeDTO getTicketType(Long matchId, Long id);
 
   List<TicketTypeDTO> getAllTicketTypes(Long matchId);
 
-  TicketTypeDTO updateTicketType(Long id, UpdateTicketTypeRequest request);
+  TicketTypeDTO updateTicketType(Long matchId, Long id, UpdateTicketTypeRequest request);
 
-  void deleteTicketType(Long id);
+  void deleteTicketType(Long matchId, Long id);
 }
