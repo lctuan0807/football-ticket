@@ -1,10 +1,19 @@
 package com.footballticket.service.impl;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
+
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.footballticket.dto.reservation.CreateReservationRequest;
 import com.footballticket.dto.reservation.ReservationDTO;
+import com.footballticket.entity.ReservationEntity;
+import com.footballticket.enums.ReservationStatusEnum;
 import com.footballticket.exceptions.InsufficientTicketException;
+import com.footballticket.exceptions.ReservationCreationFailedException;
+import com.footballticket.repository.ReservationRepository;
 import com.footballticket.repository.TicketTypeRepository;
 import com.footballticket.service.ReservationService;
 
@@ -17,10 +26,15 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class ReservationServiceImpl implements ReservationService {
 
+  private static final Duration RESERVATION_HOLD_DURATION = Duration.ofMinutes(15);
+
   private final TicketTypeRepository ticketTypeRepository;
+  private final ReservationRepository reservationRepository;
+  private final ModelMapper modelMapper;
 
   @Override
-  public boolean createReservation(Long matchId, Long ticketTypeId, CreateReservationRequest request) {
+  @Transactional
+  public ReservationDTO createReservation(Long matchId, Long ticketTypeId, CreateReservationRequest request) {
     try {
       int quantity = request.quantity();
       log.info("Creating reservation for matchId: {}, ticketTypeId: {}, quantity: {}", matchId, ticketTypeId, quantity);
@@ -28,19 +42,34 @@ public class ReservationServiceImpl implements ReservationService {
       log.info("Available quantity for ticketTypeId: {}: {}", ticketTypeId, availableQuantity);
 
       if (availableQuantity < quantity) {
-        // throw new RuntimeException("Not enough stock available");
         log.info("availableQuantity < quantity: {} < {}", availableQuantity, quantity);
         throw new InsufficientTicketException("Not enough stock available for ticket type: " + ticketTypeId
             + ", available: " + availableQuantity + ", requested: " + quantity);
-        // return false;
       }
-      boolean result = ticketTypeRepository.reserve(ticketTypeId, quantity) > 0;
-      log.info("Reservation result for ticketTypeId: {}: {}", ticketTypeId, result);
-      return result;
+
+      boolean reserved = ticketTypeRepository.reserve(ticketTypeId, quantity) > 0;
+      log.info("Reservation result for ticketTypeId: {}: {}", ticketTypeId, reserved);
+      if (!reserved) {
+        throw new ReservationCreationFailedException(
+            "Could not reserve ticket type: " + ticketTypeId + " due to concurrent stock update");
+      }
+
+      ReservationEntity reservation = new ReservationEntity();
+      reservation.setUserId(request.userId());
+      reservation.setTicketTypeId(ticketTypeId);
+      reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+      reservation.setQuantity(quantity);
+      reservation.setExpiresAt(LocalDateTime.now().plus(RESERVATION_HOLD_DURATION));
+
+      ReservationEntity saved = reservationRepository.save(reservation);
+      log.info("Reservation created: id={} for ticketTypeId={} userId={}", saved.getId(), ticketTypeId,
+          request.userId());
+
+      return toDto(saved, matchId);
     } catch (PessimisticLockException e) {
       log.error("Pessimistic lock exception occurred", e);
-      // throw new RuntimeException("Reservation failed due to concurrent access", e);
-      return false;
+      throw new ReservationCreationFailedException(
+          "Could not create reservation for ticket type: " + ticketTypeId + " due to a concurrent access conflict");
     }
   }
 
@@ -57,6 +86,13 @@ public class ReservationServiceImpl implements ReservationService {
   @Override
   public ReservationDTO cancelReservation(Long id) {
     throw new UnsupportedOperationException("Unimplemented method 'cancelReservation'");
+  }
+
+  private ReservationDTO toDto(ReservationEntity entity, Long matchId) {
+    ReservationDTO dto = modelMapper.map(entity, ReservationDTO.class);
+    dto.setMatchId(matchId);
+    dto.setStatus(ReservationStatusEnum.values()[entity.getStatus()].name());
+    return dto;
   }
 
 }

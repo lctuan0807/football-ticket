@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.footballticket.exceptions.InsufficientTicketException;
 import com.footballticket.exceptions.InvalidCredentialsException;
 import com.footballticket.exceptions.InvalidReservationStateException;
+import com.footballticket.exceptions.ReservationCreationFailedException;
 import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 
@@ -19,7 +20,7 @@ import com.footballticket.exceptions.ResourceNotFoundException;
 public class GlobalExceptionHandler {
 
   @ExceptionHandler({ ResourceAlreadyExistsException.class, InsufficientTicketException.class,
-      InvalidReservationStateException.class })
+      InvalidReservationStateException.class, ReservationCreationFailedException.class })
   public ResponseEntity<ApiResponse<Void>> handleConflictException(Exception e) {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(HttpStatus.CONFLICT, e.getMessage()));
   }

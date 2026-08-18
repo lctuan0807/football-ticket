@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 @Data
 public class ReservationDTO {
   private Long id;
+  private Long userId;
   private Long ticketTypeId;
   private Long matchId;
   private Integer quantity;
