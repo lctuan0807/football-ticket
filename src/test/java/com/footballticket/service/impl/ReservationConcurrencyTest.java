@@ -16,10 +16,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import com.footballticket.dto.reservation.CreateReservationRequest;
+import com.footballticket.dto.reservation.ReservationDTO;
 import com.footballticket.entity.MatchEntity;
 import com.footballticket.entity.TicketTypeEntity;
 import com.footballticket.exceptions.InsufficientTicketException;
+import com.footballticket.exceptions.ReservationCreationFailedException;
 import com.footballticket.repository.MatchRepository;
+import com.footballticket.repository.ReservationRepository;
 import com.footballticket.repository.TicketTypeRepository;
 import com.footballticket.service.ReservationService;
 
@@ -37,6 +40,9 @@ class ReservationConcurrencyTest {
 
   @Autowired
   private MatchRepository matchRepository;
+
+  @Autowired
+  private ReservationRepository reservationRepository;
 
   private Long matchId;
   private Long ticketTypeId;
@@ -70,6 +76,9 @@ class ReservationConcurrencyTest {
 
   @AfterEach
   void tearDown() {
+    reservationRepository.findAll().stream()
+        .filter(reservation -> reservation.getTicketTypeId().equals(ticketTypeId))
+        .forEach(reservation -> reservationRepository.deleteById(reservation.getId()));
     ticketTypeRepository.deleteById(ticketTypeId);
     matchRepository.deleteById(matchId);
   }
@@ -85,13 +94,15 @@ class ReservationConcurrencyTest {
       executor.submit(() -> {
         try {
           startLatch.await();
-          boolean result = reservationService.createReservation(matchId, ticketTypeId,
-              new CreateReservationRequest(1));
-          if (result) {
+          ReservationDTO result = reservationService.createReservation(matchId, ticketTypeId,
+              new CreateReservationRequest(1L, 1));
+          if (result != null) {
             successCount.incrementAndGet();
           }
         } catch (InsufficientTicketException e) {
           // expected once stock is exhausted
+        } catch (ReservationCreationFailedException e) {
+          // expected once the atomic decrement loses the race after the pre-check passed
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         } finally {
@@ -113,5 +124,11 @@ class ReservationConcurrencyTest {
         .isLessThanOrEqualTo(INITIAL_STOCK);
     assertThat(successCount.get()).as("successful reservations must exactly account for consumed stock")
         .isEqualTo(INITIAL_STOCK - remainingStock);
+
+    long persistedReservations = reservationRepository.findAll().stream()
+        .filter(reservation -> reservation.getTicketTypeId().equals(ticketTypeId))
+        .count();
+    assertThat(persistedReservations).as("a reservation record must be persisted for each successful call")
+        .isEqualTo(successCount.get());
   }
 }
