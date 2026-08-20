@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 
 import org.modelmapper.ModelMapper;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import com.footballticket.enums.ReservationStatusEnum;
 import com.footballticket.exceptions.InsufficientTicketException;
 import com.footballticket.exceptions.InvalidReservationStateException;
 import com.footballticket.exceptions.ReservationCreationFailedException;
+import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.ReservationRepository;
 import com.footballticket.repository.TicketTypeRepository;
@@ -41,6 +43,14 @@ public class ReservationServiceImpl implements ReservationService {
     try {
       int quantity = request.quantity();
       log.info("Creating reservation for matchId: {}, ticketTypeId: {}, quantity: {}", matchId, ticketTypeId, quantity);
+
+      boolean hasPendingReservation = reservationRepository.existsByUserIdAndTicketTypeIdAndStatusAndExpiresAtAfter(
+          request.userId(), ticketTypeId, ReservationStatusEnum.PENDING.toInt(), LocalDateTime.now());
+      if (hasPendingReservation) {
+        throw new ResourceAlreadyExistsException(
+            "User " + request.userId() + " already has a pending reservation for ticket type: " + ticketTypeId);
+      }
+
       int availableQuantity = ticketTypeRepository.getAvailableQuantity(ticketTypeId);
       log.info("Available quantity for ticketTypeId: {}: {}", ticketTypeId, availableQuantity);
 
@@ -73,6 +83,11 @@ public class ReservationServiceImpl implements ReservationService {
       log.error("Pessimistic lock exception occurred", e);
       throw new ReservationCreationFailedException(
           "Could not create reservation for ticket type: " + ticketTypeId + " due to a concurrent access conflict");
+    } catch (DataIntegrityViolationException e) {
+      log.error("Duplicate pending reservation detected for userId: {}, ticketTypeId: {}", request.userId(),
+          ticketTypeId, e);
+      throw new ResourceAlreadyExistsException(
+          "User " + request.userId() + " already has a pending reservation for ticket type: " + ticketTypeId);
     }
   }
 

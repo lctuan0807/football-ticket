@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import com.footballticket.dto.reservation.CreateReservationRequest;
 import com.footballticket.dto.reservation.ReservationDTO;
@@ -30,6 +32,7 @@ import com.footballticket.enums.ReservationStatusEnum;
 import com.footballticket.exceptions.InsufficientTicketException;
 import com.footballticket.exceptions.InvalidReservationStateException;
 import com.footballticket.exceptions.ReservationCreationFailedException;
+import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.ReservationRepository;
 import com.footballticket.repository.TicketTypeRepository;
@@ -85,6 +88,33 @@ class ReservationServiceImplTest {
     assertThat(persisted.getQuantity()).isEqualTo(2);
     assertThat(persisted.getStatus()).isEqualTo(0);
     assertThat(persisted.getExpiresAt()).isCloseTo(LocalDateTime.now().plusMinutes(15), within(5, ChronoUnit.SECONDS));
+  }
+
+  @Test
+  void createReservation_throwsResourceAlreadyExistsException_whenUserHasPendingReservationForTicketType() {
+    given(reservationRepository.existsByUserIdAndTicketTypeIdAndStatusAndExpiresAtAfter(
+        eq(1L), eq(10L), eq(ReservationStatusEnum.PENDING.toInt()), any(LocalDateTime.class)))
+        .willReturn(true);
+
+    assertThatThrownBy(() -> reservationService.createReservation(1L, 10L, new CreateReservationRequest(1L, 2)))
+        .isInstanceOf(ResourceAlreadyExistsException.class)
+        .hasMessageContaining("already has a pending reservation");
+
+    verify(ticketTypeRepository, never()).getAvailableQuantity(any());
+    verify(ticketTypeRepository, never()).reserve(any(), anyInt());
+    verify(reservationRepository, never()).save(any(ReservationEntity.class));
+  }
+
+  @Test
+  void createReservation_throwsResourceAlreadyExistsException_whenSaveViolatesPendingUniqueConstraint() {
+    given(ticketTypeRepository.getAvailableQuantity(10L)).willReturn(50);
+    given(ticketTypeRepository.reserve(10L, 2)).willReturn(1);
+    given(reservationRepository.save(any(ReservationEntity.class)))
+        .willThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint"));
+
+    assertThatThrownBy(() -> reservationService.createReservation(1L, 10L, new CreateReservationRequest(1L, 2)))
+        .isInstanceOf(ResourceAlreadyExistsException.class)
+        .hasMessageContaining("already has a pending reservation");
   }
 
   @Test
