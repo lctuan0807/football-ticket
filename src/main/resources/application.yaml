@@ -36,7 +36,7 @@ spring:
       port: 6389
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: localhost:9094
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -45,7 +45,6 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: com.footballticket.messaging
-        spring.json.value.default.type: com.footballticket.messaging.ReservationEvent
 
 jwt:
   secret: ${JWT_SECRET:c0VjdXJlLURldi1Pbmx5LVNlY3JldC1LZXktRm9yLUpXVC1IUzI1Ni1TaWduaW5nLTEyMzQ1Ng==}

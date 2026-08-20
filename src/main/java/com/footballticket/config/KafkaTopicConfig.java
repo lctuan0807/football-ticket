@@ -13,7 +13,7 @@ public class KafkaTopicConfig {
   @Bean
   public NewTopic reservationPlaceTopic() {
     return TopicBuilder.name(RESERVATION_PLACE_TOPIC)
-        .partitions(1)
+        .partitions(3)
         .replicas(1)
         .build();
   }
