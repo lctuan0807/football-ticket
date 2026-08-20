@@ -8,7 +8,7 @@ A ticket reservation backend for football matches — manage matches and their t
 - Spring Web, Spring Data JPA, Spring Security, JWT (`jjwt` 0.12.6)
 - **PostgreSQL 16** — driver + Hibernate `ddl-auto: update` (no Flyway/Liquibase; schema is auto-managed)
 - **Redis 7** + **Redisson** 4.6.1 — caching and distributed locking for reservations
-- **Kafka** (KRaft mode, no Zookeeper) — messaging broker, via `spring-boot-starter-kafka`; publishes reservation lifecycle events
+- **Kafka** (KRaft mode, no Zookeeper) — messaging broker, via `spring-boot-starter-kafka`
 - Lombok, ModelMapper, Hibernate Validator
 - **API docs**: springdoc-openapi (Swagger UI) 3.1.0
 - **Testing**: JUnit 5, Mockito, MockMvc (`@WebMvcTest`), AssertJ, `spring-security-test`, plus a full `@SpringBootTest` concurrency test
@@ -29,7 +29,7 @@ A ticket reservation backend for football matches — manage matches and their t
    This runs `docker-compose -f environment/docker-compose-dev.yml up -d`, creating:
    - Postgres 16, db `football_ticket`, user/pass `postgres`/`postgres`, seeded via `environment/postgres/data_init.sql` with 50 sample matches (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, ...) and their ticket types.
    - Redis 7.
-   - Kafka (single-node, KRaft mode) on `localhost:9092`, plus a [Kafka UI](https://github.com/provectus/kafka-ui) at `http://localhost:8090` for browsing topics/messages.
+   - Kafka (single-node, KRaft mode) on `localhost:9094`, plus a [Kafka UI](https://github.com/provectus/kafka-ui) at `http://localhost:8090` for browsing topics/messages.
 
 2. **Configure environment variables** (optional for local dev — sensible defaults are baked into `application.yaml`):
    ```
@@ -65,16 +65,13 @@ JWT infrastructure is wired up (`POST /api/v1/auth/register`, `/login`, `/logout
 
 ## Messaging (Kafka)
 
-A Kafka broker is available at `localhost:9092` (`spring-boot-starter-kafka`, config in `application.yaml`). `ReservationServiceImpl` publishes a `ReservationEvent` (reservation id, match id, ticket type id, user id, quantity, status, timestamp) to the `reservation-events` topic whenever a reservation is **created** (status `PENDING`), **confirmed**, or **cancelled** — see `com.footballticket.messaging`:
+A Kafka broker is available at `localhost:9094` (`spring-boot-starter-kafka`, config in `application.yaml`). `KafkaTopicConfig` declares a `reservation-place-topic` (3 partitions) on startup, but no producer or consumer is wired up yet — it's infrastructure ready for use, not an active event flow.
 
-- `ReservationEventProducer` — a `@TransactionalEventListener(phase = AFTER_COMMIT)` that publishes to Kafka only after the DB transaction actually commits (so a rolled-back reservation never produces an event).
-- `ReservationEventConsumer` — a `@KafkaListener` (consumer group `footballticket-reservation-consumer`) that currently just logs received events; it's a starting point for adding real downstream handling (notifications, analytics, etc).
-
-Inspect the topic via Kafka UI (`http://localhost:8090`) or the broker's CLI:
+Inspect the broker via Kafka UI (`http://localhost:8090`) or its CLI (run inside the container, so it uses the internal listener port `9092` rather than the host-mapped `9094`):
 
 ```bash
-docker exec football-ticket-kafka /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 --topic reservation-events --from-beginning
+docker exec football-ticket-kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list
 ```
 
 ## API response format
