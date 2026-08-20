@@ -104,8 +104,46 @@ public class ReservationServiceImpl implements ReservationService {
   }
 
   @Override
+  @Transactional(noRollbackFor = InvalidReservationStateException.class)
   public ReservationDTO confirmReservation(Long id) {
-    throw new UnsupportedOperationException("Unimplemented method 'confirmReservation'");
+    ReservationEntity reservation = reservationRepository.findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("Reservation not found: " + id));
+
+    // Check if reservation is in PENDING status
+    if (reservation.getStatus() != ReservationStatusEnum.PENDING.toInt()) {
+      throw new InvalidReservationStateException(
+          "Cannot confirm reservation " + id + " in status "
+              + ReservationStatusEnum.values()[reservation.getStatus()].name());
+    }
+
+    // Check if reservation has expired
+    if (reservation.getExpiresAt().isBefore(LocalDateTime.now())) {
+      expireAndReleaseStock(reservation);
+      throw new InvalidReservationStateException(
+          "Cannot confirm reservation " + id + " because its hold expired at " + reservation.getExpiresAt());
+    }
+
+    int updated = reservationRepository.updateStatusIfCurrentStatus(
+        id, ReservationStatusEnum.PENDING.toInt(), ReservationStatusEnum.CONFIRMED.toInt());
+    if (updated == 0) {
+      throw new InvalidReservationStateException(
+          "Reservation " + id + " was already transitioned by a concurrent request");
+    }
+
+    TicketTypeEntity ticketType = ticketTypeRepository.findById(reservation.getTicketTypeId())
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "Ticket type not found: " + reservation.getTicketTypeId()));
+
+    reservation.setStatus(ReservationStatusEnum.CONFIRMED.toInt());
+    return toDto(reservation, ticketType.getMatch().getId());
+  }
+
+  private void expireAndReleaseStock(ReservationEntity reservation) {
+    int updated = reservationRepository.updateStatusIfCurrentStatus(
+        reservation.getId(), ReservationStatusEnum.PENDING.toInt(), ReservationStatusEnum.EXPIRED.toInt());
+    if (updated > 0) {
+      ticketTypeRepository.release(reservation.getTicketTypeId(), reservation.getQuantity());
+    }
   }
 
   @Override

@@ -304,4 +304,151 @@ class ReservationServiceImplTest {
     assertThatThrownBy(() -> reservationService.getReservation(100L))
         .isInstanceOf(ResourceNotFoundException.class);
   }
+
+  @Test
+  void confirmReservation_persistsAndReturnsConfirmedDto_whenPendingAndNotExpired() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setUserId(1L);
+    reservation.setTicketTypeId(10L);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    reservation.setQuantity(2);
+    reservation.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(reservationRepository.updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.CONFIRMED.toInt())).willReturn(1);
+
+    MatchEntity match = new MatchEntity();
+    match.setId(1L);
+    TicketTypeEntity ticketType = new TicketTypeEntity();
+    ticketType.setId(10L);
+    ticketType.setMatch(match);
+    given(ticketTypeRepository.findById(10L)).willReturn(Optional.of(ticketType));
+
+    ReservationDTO result = reservationService.confirmReservation(100L);
+
+    assertThat(result.getId()).isEqualTo(100L);
+    assertThat(result.getMatchId()).isEqualTo(1L);
+    assertThat(result.getStatus()).isEqualTo("CONFIRMED");
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void confirmReservation_throwsResourceNotFoundException_whenReservationMissing() {
+    given(reservationRepository.findById(999L)).willReturn(Optional.empty());
+
+    assertThatThrownBy(() -> reservationService.confirmReservation(999L))
+        .isInstanceOf(ResourceNotFoundException.class);
+
+    verify(reservationRepository, never()).updateStatusIfCurrentStatus(any(), any(), any());
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void confirmReservation_throwsInvalidReservationStateException_whenAlreadyConfirmed() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setStatus(ReservationStatusEnum.CONFIRMED.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+
+    assertThatThrownBy(() -> reservationService.confirmReservation(100L))
+        .isInstanceOf(InvalidReservationStateException.class)
+        .hasMessageContaining("CONFIRMED");
+
+    verify(reservationRepository, never()).updateStatusIfCurrentStatus(any(), any(), any());
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void confirmReservation_throwsInvalidReservationStateException_whenAlreadyCancelled() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setStatus(ReservationStatusEnum.CANCELLED.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+
+    assertThatThrownBy(() -> reservationService.confirmReservation(100L))
+        .isInstanceOf(InvalidReservationStateException.class)
+        .hasMessageContaining("CANCELLED");
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void confirmReservation_throwsInvalidReservationStateException_whenAlreadyExpired() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setStatus(ReservationStatusEnum.EXPIRED.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+
+    assertThatThrownBy(() -> reservationService.confirmReservation(100L))
+        .isInstanceOf(InvalidReservationStateException.class)
+        .hasMessageContaining("EXPIRED");
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void confirmReservation_lazilyExpiresAndReleasesStock_whenPendingButHoldExpired() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setTicketTypeId(10L);
+    reservation.setQuantity(3);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    reservation.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(reservationRepository.updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.EXPIRED.toInt())).willReturn(1);
+
+    assertThatThrownBy(() -> reservationService.confirmReservation(100L))
+        .isInstanceOf(InvalidReservationStateException.class)
+        .hasMessageContaining("expired");
+
+    verify(reservationRepository).updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.EXPIRED.toInt());
+    verify(reservationRepository, never()).updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.CONFIRMED.toInt());
+
+    ArgumentCaptor<Long> ticketTypeIdCaptor = ArgumentCaptor.forClass(Long.class);
+    ArgumentCaptor<Integer> quantityCaptor = ArgumentCaptor.forClass(Integer.class);
+    verify(ticketTypeRepository).release(ticketTypeIdCaptor.capture(), quantityCaptor.capture());
+    assertThat(ticketTypeIdCaptor.getValue()).isEqualTo(10L);
+    assertThat(quantityCaptor.getValue()).isEqualTo(3);
+  }
+
+  @Test
+  void confirmReservation_doesNotDoubleReleaseStock_whenExpiryTransitionLosesConcurrentRace() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setTicketTypeId(10L);
+    reservation.setQuantity(3);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    reservation.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(reservationRepository.updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.EXPIRED.toInt())).willReturn(0);
+
+    assertThatThrownBy(() -> reservationService.confirmReservation(100L))
+        .isInstanceOf(InvalidReservationStateException.class);
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void confirmReservation_throwsInvalidReservationStateException_whenConfirmTransitionLosesRace() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setTicketTypeId(10L);
+    reservation.setQuantity(3);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    reservation.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(reservationRepository.updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.CONFIRMED.toInt())).willReturn(0);
+
+    assertThatThrownBy(() -> reservationService.confirmReservation(100L))
+        .isInstanceOf(InvalidReservationStateException.class);
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
 }

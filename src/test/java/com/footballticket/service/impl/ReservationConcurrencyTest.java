@@ -19,7 +19,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import com.footballticket.dto.reservation.CreateReservationRequest;
 import com.footballticket.dto.reservation.ReservationDTO;
 import com.footballticket.entity.MatchEntity;
+import com.footballticket.entity.ReservationEntity;
 import com.footballticket.entity.TicketTypeEntity;
+import com.footballticket.enums.ReservationStatusEnum;
 import com.footballticket.exceptions.InsufficientTicketException;
 import com.footballticket.exceptions.InvalidReservationStateException;
 import com.footballticket.exceptions.ReservationCreationFailedException;
@@ -199,5 +201,79 @@ class ReservationConcurrencyTest {
     assertThat(ticketTypeRepository.getAvailableQuantity(ticketTypeId))
         .as("stock must be released exactly once, not once per attempt")
         .isEqualTo(stockAfterCreate + 5);
+  }
+
+  @Test
+  void confirmAndCancelReservation_exactlyOneWins_whenRacedConcurrentlyOnSamePendingReservation()
+      throws InterruptedException {
+    ReservationDTO created = reservationService.createReservation(matchId, ticketTypeId,
+        new CreateReservationRequest(1L, 5));
+    int stockAfterCreate = ticketTypeRepository.getAvailableQuantity(ticketTypeId);
+
+    int concurrentAttempts = 10;
+    ExecutorService executor = Executors.newFixedThreadPool(concurrentAttempts);
+    CountDownLatch startLatch = new CountDownLatch(1);
+    CountDownLatch doneLatch = new CountDownLatch(concurrentAttempts);
+    AtomicInteger confirmSuccessCount = new AtomicInteger();
+    AtomicInteger cancelSuccessCount = new AtomicInteger();
+
+    for (int i = 0; i < concurrentAttempts; i++) {
+      boolean confirmBranch = i % 2 == 0;
+      executor.submit(() -> {
+        try {
+          startLatch.await();
+          if (confirmBranch) {
+            reservationService.confirmReservation(created.getId());
+            confirmSuccessCount.incrementAndGet();
+          } else {
+            reservationService.cancelReservation(created.getId());
+            cancelSuccessCount.incrementAndGet();
+          }
+        } catch (InvalidReservationStateException e) {
+          // expected for every loser of the race
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        } finally {
+          doneLatch.countDown();
+        }
+      });
+    }
+
+    startLatch.countDown();
+    boolean completed = doneLatch.await(30, TimeUnit.SECONDS);
+    executor.shutdown();
+
+    assertThat(completed).as("all requests finished before timeout").isTrue();
+
+    int totalSuccesses = confirmSuccessCount.get() + cancelSuccessCount.get();
+    assertThat(totalSuccesses).as("exactly one of confirm/cancel should win the race").isEqualTo(1);
+
+    int finalStock = ticketTypeRepository.getAvailableQuantity(ticketTypeId);
+    if (cancelSuccessCount.get() == 1) {
+      assertThat(finalStock).as("stock must be released back when cancel wins").isEqualTo(stockAfterCreate + 5);
+    } else {
+      assertThat(finalStock).as("stock must remain decremented when confirm wins").isEqualTo(stockAfterCreate);
+    }
+  }
+
+  @Test
+  void confirmReservation_lazilyExpiresAndReleasesStockInDatabase_whenHoldExpired() {
+    ReservationDTO created = reservationService.createReservation(matchId, ticketTypeId,
+        new CreateReservationRequest(1L, 4));
+    int stockAfterCreate = ticketTypeRepository.getAvailableQuantity(ticketTypeId);
+
+    ReservationEntity reservation = reservationRepository.findById(created.getId()).orElseThrow();
+    reservation.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+    reservationRepository.save(reservation);
+
+    assertThatThrownBy(() -> reservationService.confirmReservation(created.getId()))
+        .isInstanceOf(InvalidReservationStateException.class);
+
+    ReservationEntity afterAttempt = reservationRepository.findById(created.getId()).orElseThrow();
+    assertThat(afterAttempt.getStatus()).as("reservation must actually persist as EXPIRED, not roll back")
+        .isEqualTo(ReservationStatusEnum.EXPIRED.toInt());
+    assertThat(ticketTypeRepository.getAvailableQuantity(ticketTypeId))
+        .as("stock must actually be released back to the database, not rolled back")
+        .isEqualTo(stockAfterCreate + 4);
   }
 }

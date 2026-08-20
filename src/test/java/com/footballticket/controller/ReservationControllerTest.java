@@ -32,199 +32,243 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(ReservationController.class)
 class ReservationControllerTest {
 
-  @Autowired
-  private MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
-  @Autowired
-  private ObjectMapper objectMapper;
+    @Autowired
+    private ObjectMapper objectMapper;
 
-  @MockitoBean
-  private ReservationService reservationService;
+    @MockitoBean
+    private ReservationService reservationService;
 
-  @Test
-  void createReservation_returnsCreatedReservation_whenReservationSucceeds() throws Exception {
-    CreateReservationRequest request = new CreateReservationRequest(1L, 2);
+    @Test
+    void createReservation_returnsCreatedReservation_whenReservationSucceeds() throws Exception {
+        CreateReservationRequest request = new CreateReservationRequest(1L, 2);
 
-    ReservationDTO response = new ReservationDTO();
-    response.setId(100L);
-    response.setUserId(1L);
-    response.setTicketTypeId(10L);
-    response.setMatchId(1L);
-    response.setQuantity(2);
-    response.setStatus("PENDING");
-    response.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-    response.setCreatedAt(LocalDateTime.now());
+        ReservationDTO response = new ReservationDTO();
+        response.setId(100L);
+        response.setUserId(1L);
+        response.setTicketTypeId(10L);
+        response.setMatchId(1L);
+        response.setQuantity(2);
+        response.setStatus("PENDING");
+        response.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        response.setCreatedAt(LocalDateTime.now());
 
-    given(reservationService.createReservation(eq(1L), eq(10L), any(CreateReservationRequest.class)))
-        .willReturn(response);
+        given(reservationService.createReservation(eq(1L), eq(10L), any(CreateReservationRequest.class)))
+                .willReturn(response);
 
-    mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code", is(200)))
-        .andExpect(jsonPath("$.message", is("Reservation created successfully")))
-        .andExpect(jsonPath("$.data.id", is(100)))
-        .andExpect(jsonPath("$.data.userId", is(1)))
-        .andExpect(jsonPath("$.data.ticketTypeId", is(10)))
-        .andExpect(jsonPath("$.data.matchId", is(1)))
-        .andExpect(jsonPath("$.data.quantity", is(2)))
-        .andExpect(jsonPath("$.data.status", is("PENDING")));
-  }
+        mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code", is(200)))
+                .andExpect(jsonPath("$.message", is("Reservation created successfully")))
+                .andExpect(jsonPath("$.data.id", is(100)))
+                .andExpect(jsonPath("$.data.userId", is(1)))
+                .andExpect(jsonPath("$.data.ticketTypeId", is(10)))
+                .andExpect(jsonPath("$.data.matchId", is(1)))
+                .andExpect(jsonPath("$.data.quantity", is(2)))
+                .andExpect(jsonPath("$.data.status", is("PENDING")));
+    }
 
-  @Test
-  void createReservation_returnsConflict_whenNotEnoughStock() throws Exception {
-    CreateReservationRequest request = new CreateReservationRequest(1L, 999);
+    @Test
+    void createReservation_returnsConflict_whenNotEnoughStock() throws Exception {
+        CreateReservationRequest request = new CreateReservationRequest(1L, 999);
 
-    given(reservationService.createReservation(eq(1L), eq(10L), any(CreateReservationRequest.class)))
-        .willThrow(new InsufficientTicketException(
-            "Not enough stock available for ticket type: 10, available: 5, requested: 999"));
+        given(reservationService.createReservation(eq(1L), eq(10L), any(CreateReservationRequest.class)))
+                .willThrow(new InsufficientTicketException(
+                        "Not enough stock available for ticket type: 10, available: 5, requested: 999"));
 
-    mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.code", is(409)))
-        .andExpect(jsonPath("$.message",
-            is("Not enough stock available for ticket type: 10, available: 5, requested: 999")));
-  }
+        mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code", is(409)))
+                .andExpect(jsonPath("$.message",
+                        is("Not enough stock available for ticket type: 10, available: 5, requested: 999")));
+    }
 
-  @Test
-  void createReservation_returnsConflict_whenReservationCreationFails() throws Exception {
-    CreateReservationRequest request = new CreateReservationRequest(1L, 2);
+    @Test
+    void createReservation_returnsConflict_whenReservationCreationFails() throws Exception {
+        CreateReservationRequest request = new CreateReservationRequest(1L, 2);
 
-    given(reservationService.createReservation(eq(1L), eq(10L), any(CreateReservationRequest.class)))
-        .willThrow(new ReservationCreationFailedException(
-            "Could not reserve ticket type: 10 due to concurrent stock update"));
+        given(reservationService.createReservation(eq(1L), eq(10L), any(CreateReservationRequest.class)))
+                .willThrow(new ReservationCreationFailedException(
+                        "Could not reserve ticket type: 10 due to concurrent stock update"));
 
-    mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.code", is(409)))
-        .andExpect(jsonPath("$.message", is("Could not reserve ticket type: 10 due to concurrent stock update")));
-  }
+        mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code", is(409)))
+                .andExpect(
+                        jsonPath("$.message", is("Could not reserve ticket type: 10 due to concurrent stock update")));
+    }
 
-  @Test
-  void createReservation_returnsBadRequest_whenQuantityMissing() throws Exception {
-    String requestJson = "{\"userId\": 1}";
+    @Test
+    void createReservation_returnsBadRequest_whenQuantityMissing() throws Exception {
+        String requestJson = "{\"userId\": 1}";
 
-    mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(requestJson))
-        .andExpect(status().isBadRequest());
-  }
+        mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestJson))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  void createReservation_returnsBadRequest_whenQuantityIsZero() throws Exception {
-    CreateReservationRequest request = new CreateReservationRequest(1L, 0);
+    @Test
+    void createReservation_returnsBadRequest_whenQuantityIsZero() throws Exception {
+        CreateReservationRequest request = new CreateReservationRequest(1L, 0);
 
-    mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isBadRequest());
-  }
+        mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  void createReservation_returnsBadRequest_whenQuantityIsNegative() throws Exception {
-    CreateReservationRequest request = new CreateReservationRequest(1L, -5);
+    @Test
+    void createReservation_returnsBadRequest_whenQuantityIsNegative() throws Exception {
+        CreateReservationRequest request = new CreateReservationRequest(1L, -5);
 
-    mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isBadRequest());
-  }
+        mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  void createReservation_returnsBadRequest_whenUserIdMissing() throws Exception {
-    String requestJson = "{\"quantity\": 2}";
+    @Test
+    void createReservation_returnsBadRequest_whenUserIdMissing() throws Exception {
+        String requestJson = "{\"quantity\": 2}";
 
-    mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(requestJson))
-        .andExpect(status().isBadRequest());
-  }
+        mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestJson))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  void createReservation_returnsBadRequest_whenUserIdIsNotPositive() throws Exception {
-    CreateReservationRequest request = new CreateReservationRequest(-1L, 2);
+    @Test
+    void createReservation_returnsBadRequest_whenUserIdIsNotPositive() throws Exception {
+        CreateReservationRequest request = new CreateReservationRequest(-1L, 2);
 
-    mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isBadRequest());
-  }
+        mockMvc.perform(post("/api/v1/matches/1/ticket-types/10/reservations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  void cancelReservation_returnsCancelledReservation_whenCancellationSucceeds() throws Exception {
-    ReservationDTO response = new ReservationDTO();
-    response.setId(100L);
-    response.setUserId(1L);
-    response.setTicketTypeId(10L);
-    response.setMatchId(1L);
-    response.setQuantity(2);
-    response.setStatus("CANCELLED");
-    response.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-    response.setCreatedAt(LocalDateTime.now());
+    @Test
+    void cancelReservation_returnsCancelledReservation_whenCancellationSucceeds() throws Exception {
+        ReservationDTO response = new ReservationDTO();
+        response.setId(100L);
+        response.setUserId(1L);
+        response.setTicketTypeId(10L);
+        response.setMatchId(1L);
+        response.setQuantity(2);
+        response.setStatus("CANCELLED");
+        response.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        response.setCreatedAt(LocalDateTime.now());
 
-    given(reservationService.cancelReservation(100L)).willReturn(response);
+        given(reservationService.cancelReservation(100L)).willReturn(response);
 
-    mockMvc.perform(patch("/api/v1/reservations/100/cancel"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.code", is(200)))
-        .andExpect(jsonPath("$.message", is("Reservation cancelled successfully")))
-        .andExpect(jsonPath("$.data.id", is(100)))
-        .andExpect(jsonPath("$.data.status", is("CANCELLED")));
-  }
+        mockMvc.perform(patch("/api/v1/reservations/100/cancel"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code", is(200)))
+                .andExpect(jsonPath("$.message", is("Reservation cancelled successfully")))
+                .andExpect(jsonPath("$.data.id", is(100)))
+                .andExpect(jsonPath("$.data.status", is("CANCELLED")));
+    }
 
-  @Test
-  void cancelReservation_returnsNotFound_whenReservationMissing() throws Exception {
-    given(reservationService.cancelReservation(999L))
-        .willThrow(new ResourceNotFoundException("Reservation not found: 999"));
+    @Test
+    void cancelReservation_returnsNotFound_whenReservationMissing() throws Exception {
+        given(reservationService.cancelReservation(999L))
+                .willThrow(new ResourceNotFoundException("Reservation not found: 999"));
 
-    mockMvc.perform(patch("/api/v1/reservations/999/cancel"))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code", is(404)));
-  }
+        mockMvc.perform(patch("/api/v1/reservations/999/cancel"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(404)));
+    }
 
-  @Test
-  void cancelReservation_returnsConflict_whenReservationNotPending() throws Exception {
-    given(reservationService.cancelReservation(100L))
-        .willThrow(new InvalidReservationStateException("Cannot cancel reservation 100 in status CONFIRMED"));
+    @Test
+    void cancelReservation_returnsConflict_whenReservationNotPending() throws Exception {
+        given(reservationService.cancelReservation(100L))
+                .willThrow(new InvalidReservationStateException("Cannot cancel reservation 100 in status CONFIRMED"));
 
-    mockMvc.perform(patch("/api/v1/reservations/100/cancel"))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.code", is(409)))
-        .andExpect(jsonPath("$.message", is("Cannot cancel reservation 100 in status CONFIRMED")));
-  }
+        mockMvc.perform(patch("/api/v1/reservations/100/cancel"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code", is(409)))
+                .andExpect(jsonPath("$.message", is("Cannot cancel reservation 100 in status CONFIRMED")));
+    }
 
-  @Test
-  void getReservation_returnsReservation_whenExists() throws Exception {
-    ReservationDTO response = new ReservationDTO();
-    response.setId(100L);
-    response.setUserId(1L);
-    response.setTicketTypeId(10L);
-    response.setMatchId(1L);
-    response.setQuantity(2);
-    response.setStatus("PENDING");
-    response.setExpiresAt(LocalDateTime.now().plusMinutes(15));
-    response.setCreatedAt(LocalDateTime.now());
+    @Test
+    void getReservation_returnsReservation_whenExists() throws Exception {
+        ReservationDTO response = new ReservationDTO();
+        response.setId(100L);
+        response.setUserId(1L);
+        response.setTicketTypeId(10L);
+        response.setMatchId(1L);
+        response.setQuantity(2);
+        response.setStatus("PENDING");
+        response.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        response.setCreatedAt(LocalDateTime.now());
 
-    given(reservationService.getReservation(100L)).willReturn(response);
+        given(reservationService.getReservation(100L)).willReturn(response);
 
-    mockMvc.perform(get("/api/v1/reservations/100"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.id", is(100)))
-        .andExpect(jsonPath("$.data.status", is("PENDING")));
-  }
+        mockMvc.perform(get("/api/v1/reservations/100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id", is(100)))
+                .andExpect(jsonPath("$.data.status", is("PENDING")));
+    }
 
-  @Test
-  void getReservation_returnsNotFound_whenReservationMissing() throws Exception {
-    given(reservationService.getReservation(999L))
-        .willThrow(new ResourceNotFoundException("Reservation not found: 999"));
+    @Test
+    void getReservation_returnsNotFound_whenReservationMissing() throws Exception {
+        given(reservationService.getReservation(999L))
+                .willThrow(new ResourceNotFoundException("Reservation not found: 999"));
 
-    mockMvc.perform(get("/api/v1/reservations/999"))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code", is(404)));
-  }
+        mockMvc.perform(get("/api/v1/reservations/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(404)));
+    }
+
+    @Test
+    void confirmReservation_returnsConfirmedReservation_whenConfirmationSucceeds() throws Exception {
+        ReservationDTO response = new ReservationDTO();
+        response.setId(100L);
+        response.setUserId(1L);
+        response.setTicketTypeId(10L);
+        response.setMatchId(1L);
+        response.setQuantity(2);
+        response.setStatus("CONFIRMED");
+        response.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        response.setCreatedAt(LocalDateTime.now());
+
+        given(reservationService.confirmReservation(100L)).willReturn(response);
+
+        mockMvc.perform(patch("/api/v1/reservations/100/confirm"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code", is(200)))
+                .andExpect(jsonPath("$.message", is("Reservation confirmed successfully")))
+                .andExpect(jsonPath("$.data.id", is(100)))
+                .andExpect(jsonPath("$.data.status", is("CONFIRMED")));
+    }
+
+    @Test
+    void confirmReservation_returnsNotFound_whenReservationMissing() throws Exception {
+        given(reservationService.confirmReservation(999L))
+                .willThrow(new ResourceNotFoundException("Reservation not found: 999"));
+
+        mockMvc.perform(patch("/api/v1/reservations/999/confirm"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is(404)));
+    }
+
+    @Test
+    void confirmReservation_returnsConflict_whenReservationNotPending() throws Exception {
+        given(reservationService.confirmReservation(100L))
+                .willThrow(new InvalidReservationStateException("Cannot confirm reservation 100 in status CANCELLED"));
+
+        mockMvc.perform(patch("/api/v1/reservations/100/confirm"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code", is(409)))
+                .andExpect(jsonPath("$.message", is("Cannot confirm reservation 100 in status CANCELLED")));
+    }
 }
