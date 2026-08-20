@@ -78,7 +78,14 @@ public class ReservationServiceImpl implements ReservationService {
 
   @Override
   public ReservationDTO getReservation(Long id) {
-    throw new UnsupportedOperationException("Unimplemented method 'getReservation'");
+    ReservationEntity reservation = reservationRepository.findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("Reservation not found: " + id));
+
+    TicketTypeEntity ticketType = ticketTypeRepository.findById(reservation.getTicketTypeId())
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "Ticket type not found: " + reservation.getTicketTypeId()));
+
+    return toDto(reservation, ticketType.getMatch().getId());
   }
 
   @Override

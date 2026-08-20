@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -195,5 +196,35 @@ class ReservationControllerTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code", is(409)))
         .andExpect(jsonPath("$.message", is("Cannot cancel reservation 100 in status CONFIRMED")));
+  }
+
+  @Test
+  void getReservation_returnsReservation_whenExists() throws Exception {
+    ReservationDTO response = new ReservationDTO();
+    response.setId(100L);
+    response.setUserId(1L);
+    response.setTicketTypeId(10L);
+    response.setMatchId(1L);
+    response.setQuantity(2);
+    response.setStatus("PENDING");
+    response.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+    response.setCreatedAt(LocalDateTime.now());
+
+    given(reservationService.getReservation(100L)).willReturn(response);
+
+    mockMvc.perform(get("/api/v1/reservations/100"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.id", is(100)))
+        .andExpect(jsonPath("$.data.status", is("PENDING")));
+  }
+
+  @Test
+  void getReservation_returnsNotFound_whenReservationMissing() throws Exception {
+    given(reservationService.getReservation(999L))
+        .willThrow(new ResourceNotFoundException("Reservation not found: 999"));
+
+    mockMvc.perform(get("/api/v1/reservations/999"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code", is(404)));
   }
 }
