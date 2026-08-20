@@ -1,6 +1,7 @@
 package com.footballticket.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
@@ -22,6 +23,7 @@ import com.footballticket.entity.TicketTypeEntity;
 import com.footballticket.exceptions.InsufficientTicketException;
 import com.footballticket.exceptions.InvalidReservationStateException;
 import com.footballticket.exceptions.ReservationCreationFailedException;
+import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.repository.MatchRepository;
 import com.footballticket.repository.ReservationRepository;
 import com.footballticket.repository.TicketTypeRepository;
@@ -131,6 +133,33 @@ class ReservationConcurrencyTest {
         .count();
     assertThat(persistedReservations).as("a reservation record must be persisted for each successful call")
         .isEqualTo(successCount.get());
+  }
+
+  @Test
+  void createReservation_throwsResourceAlreadyExistsException_whenUserAlreadyHasPendingReservationForTicketType() {
+    reservationService.createReservation(matchId, ticketTypeId, new CreateReservationRequest(1L, 2));
+
+    assertThatThrownBy(
+        () -> reservationService.createReservation(matchId, ticketTypeId, new CreateReservationRequest(1L, 3)))
+        .isInstanceOf(ResourceAlreadyExistsException.class);
+
+    assertThat(ticketTypeRepository.getAvailableQuantity(ticketTypeId)).isEqualTo(INITIAL_STOCK - 2);
+
+    long persistedReservations = reservationRepository.findAll().stream()
+        .filter(reservation -> reservation.getTicketTypeId().equals(ticketTypeId))
+        .count();
+    assertThat(persistedReservations).as("the rejected duplicate must not be persisted").isEqualTo(1);
+  }
+
+  @Test
+  void createReservation_allowsSecondPendingReservation_whenDifferentUsersRequestSameTicketType() {
+    ReservationDTO first = reservationService.createReservation(matchId, ticketTypeId,
+        new CreateReservationRequest(1L, 2));
+    ReservationDTO second = reservationService.createReservation(matchId, ticketTypeId,
+        new CreateReservationRequest(2L, 2));
+
+    assertThat(first.getId()).isNotEqualTo(second.getId());
+    assertThat(ticketTypeRepository.getAvailableQuantity(ticketTypeId)).isEqualTo(INITIAL_STOCK - 4);
   }
 
   @Test
