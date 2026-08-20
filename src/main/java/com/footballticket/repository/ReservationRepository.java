@@ -1,7 +1,9 @@
 package com.footballticket.repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -12,11 +14,11 @@ import com.footballticket.entity.ReservationEntity;
 import jakarta.transaction.Transactional;
 
 public interface ReservationRepository extends JpaRepository<ReservationEntity, Long> {
-  // List<ReservationEntity> findByStatusAndExpiresAtBefore(ReservationStatusEnum
-  // status, LocalDateTime time);
 
   boolean existsByUserIdAndTicketTypeIdAndStatusAndExpiresAtAfter(
       Long userId, Long ticketTypeId, Integer status, LocalDateTime now);
+
+  List<ReservationEntity> findByStatusAndExpiresAtBefore(Integer status, LocalDateTime time, Pageable pageable);
 
   @Modifying
   @Transactional
