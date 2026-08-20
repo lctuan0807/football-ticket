@@ -46,4 +46,11 @@ public class ReservationController {
     ReservationDTO reservation = reservationService.getReservation(id);
     return ResponseEntity.ok(ApiResponse.success(reservation));
   }
+
+  @PatchMapping("/reservations/{id}/confirm")
+  public ResponseEntity<ApiResponse<ReservationDTO>> confirmReservation(@PathVariable Long id) {
+    log.info("Confirming reservation id: {}", id);
+    ReservationDTO reservation = reservationService.confirmReservation(id);
+    return ResponseEntity.ok(ApiResponse.success("Reservation confirmed successfully", reservation));
+  }
 }
