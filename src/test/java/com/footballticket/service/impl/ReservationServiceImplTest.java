@@ -7,12 +7,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import com.footballticket.dto.reservation.CreateReservationRequest;
@@ -48,13 +52,22 @@ class ReservationServiceImplTest {
   @Mock
   private ReservationRepository reservationRepository;
 
+  @Mock
+  private RedissonClient redissonClient;
+
+  @Mock
+  private RLock lock;
+
   private final ModelMapper modelMapper = new ModelMapper();
 
   private ReservationServiceImpl reservationService;
 
   @BeforeEach
-  void setUp() {
-    reservationService = new ReservationServiceImpl(ticketTypeRepository, reservationRepository, modelMapper);
+  void setUp() throws InterruptedException {
+    reservationService = new ReservationServiceImpl(ticketTypeRepository, reservationRepository, modelMapper,
+        redissonClient);
+    lenient().when(redissonClient.getLock(any(String.class))).thenReturn(lock);
+    lenient().when(lock.tryLock(1, 5, TimeUnit.SECONDS)).thenReturn(true);
   }
 
   @Test
@@ -182,6 +195,19 @@ class ReservationServiceImplTest {
     verify(ticketTypeRepository).release(ticketTypeIdCaptor.capture(), quantityCaptor.capture());
     assertThat(ticketTypeIdCaptor.getValue()).isEqualTo(10L);
     assertThat(quantityCaptor.getValue()).isEqualTo(3);
+    verify(lock).unlock();
+  }
+
+  @Test
+  void cancelReservation_throwsReservationCreationFailedException_whenLockNotAcquired() throws InterruptedException {
+    given(lock.tryLock(1, 5, TimeUnit.SECONDS)).willReturn(false);
+
+    assertThatThrownBy(() -> reservationService.cancelReservation(100L))
+        .isInstanceOf(ReservationCreationFailedException.class);
+
+    verify(reservationRepository, never()).findById(any());
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+    verify(lock, never()).unlock();
   }
 
   @Test
@@ -192,6 +218,7 @@ class ReservationServiceImplTest {
         .isInstanceOf(ResourceNotFoundException.class);
 
     verify(ticketTypeRepository, never()).release(any(), anyInt());
+    verify(lock).unlock();
   }
 
   @Test
@@ -207,6 +234,7 @@ class ReservationServiceImplTest {
 
     verify(reservationRepository, never()).updateStatusIfCurrentStatus(any(), any(), any());
     verify(ticketTypeRepository, never()).release(any(), anyInt());
+    verify(lock).unlock();
   }
 
   @Test
@@ -221,6 +249,7 @@ class ReservationServiceImplTest {
         .hasMessageContaining("CANCELLED");
 
     verify(ticketTypeRepository, never()).release(any(), anyInt());
+    verify(lock).unlock();
   }
 
   @Test
@@ -235,6 +264,7 @@ class ReservationServiceImplTest {
         .hasMessageContaining("EXPIRED");
 
     verify(ticketTypeRepository, never()).release(any(), anyInt());
+    verify(lock).unlock();
   }
 
   @Test
@@ -252,6 +282,7 @@ class ReservationServiceImplTest {
         .isInstanceOf(InvalidReservationStateException.class);
 
     verify(ticketTypeRepository, never()).release(any(), anyInt());
+    verify(lock).unlock();
   }
 
   @Test

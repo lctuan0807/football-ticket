@@ -2,8 +2,11 @@ package com.footballticket.service.impl;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
 
 import org.modelmapper.ModelMapper;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,7 @@ public class ReservationServiceImpl implements ReservationService {
   private final TicketTypeRepository ticketTypeRepository;
   private final ReservationRepository reservationRepository;
   private final ModelMapper modelMapper;
+  private final RedissonClient redissonClient;
 
   @Override
   @Transactional
@@ -149,30 +153,50 @@ public class ReservationServiceImpl implements ReservationService {
   @Override
   @Transactional
   public ReservationDTO cancelReservation(Long id) {
-    ReservationEntity reservation = reservationRepository.findById(id)
-        .orElseThrow(() -> new ResourceNotFoundException("Reservation not found: " + id));
+    String lockKey = "reservation:lock:" + id;
+    RLock lock = redissonClient.getLock(lockKey);
+    boolean isLocked = false;
 
-    if (reservation.getStatus() != ReservationStatusEnum.PENDING.toInt()) {
-      throw new InvalidReservationStateException(
-          "Cannot cancel reservation " + id + " in status "
-              + ReservationStatusEnum.values()[reservation.getStatus()].name());
+    try {
+      isLocked = lock.tryLock(1, 5, TimeUnit.SECONDS);
+
+      if (!isLocked) {
+        throw new ReservationCreationFailedException("Failed to acquire lock for reservation: " + id);
+      }
+
+      ReservationEntity reservation = reservationRepository.findById(id)
+          .orElseThrow(() -> new ResourceNotFoundException("Reservation not found: " + id));
+
+      if (reservation.getStatus() != ReservationStatusEnum.PENDING.toInt()) {
+        throw new InvalidReservationStateException(
+            "Cannot cancel reservation " + id + " in status "
+                + ReservationStatusEnum.values()[reservation.getStatus()].name());
+      }
+
+      int updated = reservationRepository.updateStatusIfCurrentStatus(
+          id, ReservationStatusEnum.PENDING.toInt(), ReservationStatusEnum.CANCELLED.toInt());
+      if (updated == 0) {
+        throw new InvalidReservationStateException(
+            "Reservation " + id + " was already transitioned by a concurrent request");
+      }
+
+      ticketTypeRepository.release(reservation.getTicketTypeId(), reservation.getQuantity());
+
+      TicketTypeEntity ticketType = ticketTypeRepository.findById(reservation.getTicketTypeId())
+          .orElseThrow(() -> new ResourceNotFoundException(
+              "Ticket type not found: " + reservation.getTicketTypeId()));
+
+      reservation.setStatus(ReservationStatusEnum.CANCELLED.toInt());
+      return toDto(reservation, ticketType.getMatch().getId());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new ReservationCreationFailedException(
+          "Interrupted while acquiring lock for reservation: " + id);
+    } finally {
+      if (isLocked) {
+        lock.unlock();
+      }
     }
-
-    int updated = reservationRepository.updateStatusIfCurrentStatus(
-        id, ReservationStatusEnum.PENDING.toInt(), ReservationStatusEnum.CANCELLED.toInt());
-    if (updated == 0) {
-      throw new InvalidReservationStateException(
-          "Reservation " + id + " was already transitioned by a concurrent request");
-    }
-
-    ticketTypeRepository.release(reservation.getTicketTypeId(), reservation.getQuantity());
-
-    TicketTypeEntity ticketType = ticketTypeRepository.findById(reservation.getTicketTypeId())
-        .orElseThrow(() -> new ResourceNotFoundException(
-            "Ticket type not found: " + reservation.getTicketTypeId()));
-
-    reservation.setStatus(ReservationStatusEnum.CANCELLED.toInt());
-    return toDto(reservation, ticketType.getMatch().getId());
   }
 
   private ReservationDTO toDto(ReservationEntity entity, Long matchId) {
