@@ -56,6 +56,7 @@ public class SecurityConfig {
         .exceptionHandling(eh -> eh.authenticationEntryPoint(jwtAuthenticationEntryPoint))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers("/api/v1/**").permitAll() // temporary for testing
+            .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
         // .anyRequest().authenticated()
         )
         .authenticationProvider(authenticationProvider())
