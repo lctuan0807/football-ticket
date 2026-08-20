@@ -223,4 +223,55 @@ class ReservationServiceImplTest {
 
     verify(ticketTypeRepository, never()).release(any(), anyInt());
   }
+
+  @Test
+  void getReservation_returnsDto_whenExists() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setUserId(1L);
+    reservation.setTicketTypeId(10L);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    reservation.setQuantity(2);
+    reservation.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+
+    MatchEntity match = new MatchEntity();
+    match.setId(1L);
+    TicketTypeEntity ticketType = new TicketTypeEntity();
+    ticketType.setId(10L);
+    ticketType.setMatch(match);
+    given(ticketTypeRepository.findById(10L)).willReturn(Optional.of(ticketType));
+
+    ReservationDTO result = reservationService.getReservation(100L);
+
+    assertThat(result.getId()).isEqualTo(100L);
+    assertThat(result.getUserId()).isEqualTo(1L);
+    assertThat(result.getTicketTypeId()).isEqualTo(10L);
+    assertThat(result.getMatchId()).isEqualTo(1L);
+    assertThat(result.getQuantity()).isEqualTo(2);
+    assertThat(result.getStatus()).isEqualTo("PENDING");
+  }
+
+  @Test
+  void getReservation_throwsResourceNotFoundException_whenReservationMissing() {
+    given(reservationRepository.findById(999L)).willReturn(Optional.empty());
+
+    assertThatThrownBy(() -> reservationService.getReservation(999L))
+        .isInstanceOf(ResourceNotFoundException.class);
+
+    verify(ticketTypeRepository, never()).findById(any());
+  }
+
+  @Test
+  void getReservation_throwsResourceNotFoundException_whenTicketTypeMissing() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setTicketTypeId(10L);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(ticketTypeRepository.findById(10L)).willReturn(Optional.empty());
+
+    assertThatThrownBy(() -> reservationService.getReservation(100L))
+        .isInstanceOf(ResourceNotFoundException.class);
+  }
 }

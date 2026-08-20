@@ -1,6 +1,7 @@
 package com.footballticket.controller;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,5 +38,12 @@ public class ReservationController {
     log.info("Cancelling reservation id: {}", id);
     ReservationDTO reservation = reservationService.cancelReservation(id);
     return ResponseEntity.ok(ApiResponse.success("Reservation cancelled successfully", reservation));
+  }
+
+  @GetMapping("/reservations/{id}")
+  public ResponseEntity<ApiResponse<ReservationDTO>> getReservation(@PathVariable Long id) {
+    log.info("Getting reservation id: {}", id);
+    ReservationDTO reservation = reservationService.getReservation(id);
+    return ResponseEntity.ok(ApiResponse.success(reservation));
   }
 }
