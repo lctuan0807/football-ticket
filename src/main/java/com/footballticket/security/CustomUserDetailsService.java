@@ -6,6 +6,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import com.footballticket.entity.UserEntity;
+import com.footballticket.enums.UserRoleEnum;
 import com.footballticket.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -20,10 +21,12 @@ public class CustomUserDetailsService implements UserDetailsService {
     UserEntity user = userRepository.findByUsername(username)
         .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
+    UserRoleEnum role = user.getRole() == null ? UserRoleEnum.USER : UserRoleEnum.values()[user.getRole()];
+
     return org.springframework.security.core.userdetails.User
         .withUsername(user.getUsername())
         .password(user.getPassword())
-        .authorities("ROLE_USER")
+        .authorities("ROLE_" + role.name())
         .build();
   }
 }

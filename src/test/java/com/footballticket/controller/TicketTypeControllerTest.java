@@ -16,8 +16,11 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -33,6 +36,14 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(TicketTypeController.class)
 class TicketTypeControllerTest {
 
+  // @PreAuthorize needs method security enabled in this slice; the full
+  // SecurityConfig (filter chain, JWT filter) isn't imported here on purpose
+  // to keep this a pure controller/authorization test.
+  @TestConfiguration
+  @EnableMethodSecurity
+  static class MethodSecurityTestConfig {
+  }
+
   @Autowired
   private MockMvc mockMvc;
 
@@ -43,6 +54,7 @@ class TicketTypeControllerTest {
   private TicketTypeService ticketTypeService;
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void createTicketType_returnsCreatedTicketType_whenRequestIsValid() throws Exception {
     CreateTicketTypeRequest request = new CreateTicketTypeRequest("VIP", "Best seats", 500, 100);
     TicketTypeDTO response = new TicketTypeDTO();
@@ -67,6 +79,7 @@ class TicketTypeControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void createTicketType_returnsBadRequest_whenRequiredFieldIsMissing() throws Exception {
     String requestJson = """
         {
@@ -82,6 +95,7 @@ class TicketTypeControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void createTicketType_returnsNotFound_whenMatchDoesNotExist() throws Exception {
     CreateTicketTypeRequest request = new CreateTicketTypeRequest("VIP", "Best seats", 500, 100);
 
@@ -97,6 +111,7 @@ class TicketTypeControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void createTicketType_returnsConflict_whenDuplicateName() throws Exception {
     CreateTicketTypeRequest request = new CreateTicketTypeRequest("VIP", "Best seats", 500, 100);
 
@@ -171,6 +186,7 @@ class TicketTypeControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void updateTicketType_returnsUpdatedTicketType_whenValid() throws Exception {
     UpdateTicketTypeRequest request = new UpdateTicketTypeRequest("Category 1", "Mid-tier seats", 300, 150);
     TicketTypeDTO response = new TicketTypeDTO();
@@ -194,6 +210,7 @@ class TicketTypeControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void updateTicketType_returnsNotFound_whenNotExists() throws Exception {
     UpdateTicketTypeRequest request = new UpdateTicketTypeRequest("Category 1", "Mid-tier seats", 300, 150);
 
@@ -209,6 +226,7 @@ class TicketTypeControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void updateTicketType_returnsNotFound_whenTicketTypeBelongsToDifferentMatch() throws Exception {
     UpdateTicketTypeRequest request = new UpdateTicketTypeRequest("Category 1", "Mid-tier seats", 300, 150);
 
@@ -224,12 +242,14 @@ class TicketTypeControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void deleteTicketType_returnsNoContent() throws Exception {
     mockMvc.perform(delete("/api/v1/matches/1/ticket-types/1"))
         .andExpect(status().isNoContent());
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void deleteTicketType_returnsNotFound_whenTicketTypeBelongsToDifferentMatch() throws Exception {
     org.mockito.BDDMockito.willThrow(new ResourceNotFoundException("Ticket type not found!"))
         .given(ticketTypeService).deleteTicketType(2L, 1L);
@@ -238,5 +258,16 @@ class TicketTypeControllerTest {
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code", is(404)))
         .andExpect(jsonPath("$.message", is("Ticket type not found!")));
+  }
+
+  @Test
+  @WithMockUser(authorities = "ROLE_USER")
+  void createTicketType_returnsForbidden_whenCallerIsNotAdmin() throws Exception {
+    CreateTicketTypeRequest request = new CreateTicketTypeRequest("VIP", "Best seats", 500, 100);
+
+    mockMvc.perform(post("/api/v1/matches/1/ticket-types")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isForbidden());
   }
 }

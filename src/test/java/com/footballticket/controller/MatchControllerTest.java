@@ -17,12 +17,15 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -37,6 +40,14 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(MatchController.class)
 class MatchControllerTest {
 
+  // @PreAuthorize needs method security enabled in this slice; the full
+  // SecurityConfig (filter chain, JWT filter) isn't imported here on purpose
+  // to keep this a pure controller/authorization test.
+  @TestConfiguration
+  @EnableMethodSecurity
+  static class MethodSecurityTestConfig {
+  }
+
   @Autowired
   private MockMvc mockMvc;
 
@@ -47,6 +58,7 @@ class MatchControllerTest {
   private MatchService matchService;
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void createMatch_returnsCreatedMatch_whenRequestIsValid() throws Exception {
     CreateMatchRequest request = new CreateMatchRequest(
         "Premier League",
@@ -79,6 +91,7 @@ class MatchControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void createMatch_returnsBadRequest_whenRequiredFieldIsMissing() throws Exception {
     String requestJson = """
         {
@@ -98,6 +111,7 @@ class MatchControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void createMatch_returnsBadRequest_whenDateIsInvalid() throws Exception {
     String requestJson = """
         {
@@ -173,6 +187,7 @@ class MatchControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void updateMatch_returnsUpdatedMatch_whenRequestIsValid() throws Exception {
     UpdateMatchRequest request = new UpdateMatchRequest(
         "La Liga",
@@ -199,6 +214,7 @@ class MatchControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void updateMatch_returnsNotFound_whenMatchDoesNotExist() throws Exception {
     UpdateMatchRequest request = new UpdateMatchRequest(
         "La Liga",
@@ -219,8 +235,27 @@ class MatchControllerTest {
   }
 
   @Test
+  @WithMockUser(authorities = "ROLE_ADMIN")
   void deleteMatch_returnsNoContent() throws Exception {
     mockMvc.perform(delete("/api/v1/matches/1"))
         .andExpect(status().isNoContent());
+  }
+
+  @Test
+  @WithMockUser(authorities = "ROLE_USER")
+  void createMatch_returnsForbidden_whenCallerIsNotAdmin() throws Exception {
+    CreateMatchRequest request = new CreateMatchRequest(
+        "Premier League",
+        "1",
+        "2025/2026",
+        "Arsenal",
+        "Chelsea",
+        LocalDateTime.of(2026, 8, 20, 18, 0),
+        "Emirates Stadium");
+
+    mockMvc.perform(post("/api/v1/matches")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isForbidden());
   }
 }

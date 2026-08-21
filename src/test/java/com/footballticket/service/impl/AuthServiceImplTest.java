@@ -28,6 +28,7 @@ import com.footballticket.dto.auth.LoginRequest;
 import com.footballticket.dto.auth.RegisterRequest;
 import com.footballticket.dto.user.UserDTO;
 import com.footballticket.entity.UserEntity;
+import com.footballticket.enums.UserRoleEnum;
 import com.footballticket.exceptions.InvalidCredentialsException;
 import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.repository.UserRepository;
@@ -77,6 +78,7 @@ class AuthServiceImplTest {
     saved.setId(1L);
     saved.setUsername(registerRequest.username());
     saved.setPassword("hashed-password");
+    saved.setRole(UserRoleEnum.USER.toInt());
     given(userRepository.save(any(UserEntity.class))).willReturn(saved);
 
     UserDTO expectedDto = new UserDTO();
@@ -87,12 +89,14 @@ class AuthServiceImplTest {
     UserDTO result = authService.register(registerRequest);
 
     assertThat(result).isSameAs(expectedDto);
+    assertThat(result.getRole()).isEqualTo("USER");
 
     ArgumentCaptor<UserEntity> captor = ArgumentCaptor.forClass(UserEntity.class);
     verify(userRepository).save(captor.capture());
     UserEntity persisted = captor.getValue();
     assertThat(persisted.getUsername()).isEqualTo(registerRequest.username());
     assertThat(persisted.getPassword()).isEqualTo("hashed-password");
+    assertThat(persisted.getRole()).isEqualTo(UserRoleEnum.USER.toInt());
   }
 
   @Test
