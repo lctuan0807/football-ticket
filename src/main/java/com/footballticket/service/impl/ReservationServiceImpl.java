@@ -152,6 +152,22 @@ public class ReservationServiceImpl implements ReservationService {
 
   @Override
   @Transactional
+  public void expireReservation(Long id) {
+    ReservationEntity reservation = reservationRepository.findById(id).orElse(null);
+    if (reservation == null) {
+      log.warn("Reservation {} not found when attempting to expire", id);
+      return;
+    }
+
+    // Conditional update inside expireAndReleaseStock makes this a no-op if the
+    // reservation already moved out of PENDING (confirmed/cancelled/already
+    // expired), so re-delivery of the same Kafka message is safe.
+    expireAndReleaseStock(reservation);
+    log.info("Reservation {} expired via timeout worker", id);
+  }
+
+  @Override
+  @Transactional
   public ReservationDTO cancelReservation(Long id) {
     String lockKey = "reservation:lock:" + id;
     RLock lock = redissonClient.getLock(lockKey);

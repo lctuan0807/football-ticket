@@ -11,4 +11,6 @@ public interface ReservationService {
   ReservationDTO confirmReservation(Long id);
 
   ReservationDTO cancelReservation(Long id);
+
+  void expireReservation(Long id);
 }

@@ -482,4 +482,50 @@ class ReservationServiceImplTest {
 
     verify(ticketTypeRepository, never()).release(any(), anyInt());
   }
+
+  @Test
+  void expireReservation_releasesStockAndMarksExpired_whenReservationIsPending() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setTicketTypeId(10L);
+    reservation.setQuantity(3);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(reservationRepository.updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.EXPIRED.toInt())).willReturn(1);
+
+    reservationService.expireReservation(100L);
+
+    ArgumentCaptor<Long> ticketTypeIdCaptor = ArgumentCaptor.forClass(Long.class);
+    ArgumentCaptor<Integer> quantityCaptor = ArgumentCaptor.forClass(Integer.class);
+    verify(ticketTypeRepository).release(ticketTypeIdCaptor.capture(), quantityCaptor.capture());
+    assertThat(ticketTypeIdCaptor.getValue()).isEqualTo(10L);
+    assertThat(quantityCaptor.getValue()).isEqualTo(3);
+  }
+
+  @Test
+  void expireReservation_doesNothing_whenReservationMissing() {
+    given(reservationRepository.findById(999L)).willReturn(Optional.empty());
+
+    reservationService.expireReservation(999L);
+
+    verify(reservationRepository, never()).updateStatusIfCurrentStatus(any(), any(), any());
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void expireReservation_doesNotReleaseStock_whenAlreadyTransitionedByConcurrentRequest() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setTicketTypeId(10L);
+    reservation.setQuantity(3);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(reservationRepository.updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.EXPIRED.toInt())).willReturn(0);
+
+    reservationService.expireReservation(100L);
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
 }

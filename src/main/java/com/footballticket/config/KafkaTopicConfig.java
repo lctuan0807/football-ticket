@@ -9,10 +9,19 @@ import org.springframework.kafka.config.TopicBuilder;
 public class KafkaTopicConfig {
 
   public static final String RESERVATION_PLACE_TOPIC = "reservation-place-topic";
+  public static final String RESERVATION_EXPIRED_TOPIC = "reservation-expired-topic";
 
   @Bean
   public NewTopic reservationPlaceTopic() {
     return TopicBuilder.name(RESERVATION_PLACE_TOPIC)
+        .partitions(3)
+        .replicas(1)
+        .build();
+  }
+
+  @Bean
+  public NewTopic reservationExpiredTopic() {
+    return TopicBuilder.name(RESERVATION_EXPIRED_TOPIC)
         .partitions(3)
         .replicas(1)
         .build();
