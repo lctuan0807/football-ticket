@@ -50,12 +50,14 @@ A ticket reservation backend for football matches — manage matches and their t
 | Package | Contents |
 |---|---|
 | `common` | `ApiResponse` envelope, `GlobalExceptionHandler` |
-| `config` | Redis/Redisson config, ModelMapper config, reservation schema init |
+| `config` | Redis/Redisson config, ModelMapper config, Kafka topic/producer config, reservation schema init |
 | `controller` | REST controllers (Auth, Match, TicketType, Reservation) |
+| `cronjob` | `ReservationTimeoutWorker` — polls for expired reservations and dispatches them to Kafka |
 | `dto` | Request/response DTOs, grouped per resource |
 | `entity` | JPA entities (`MatchEntity`, `TicketTypeEntity`, `ReservationEntity`, `UserEntity`) |
 | `enums` | `MatchStatusEnum`, `ReservationStatusEnum` |
 | `exceptions` | Domain exceptions mapped to HTTP status codes |
+| `messaging` | Kafka event records and `@KafkaListener` consumers |
 | `repository` | Spring Data JPA repositories |
 | `security` | JWT filter/service, Spring Security config |
 | `service` | Business logic (+ `service/impl`, `service/cache`) |
@@ -66,13 +68,18 @@ JWT infrastructure is wired up (`POST /api/v1/auth/register`, `/login`, `/logout
 
 ## Messaging (Kafka)
 
-A Kafka broker is available at `localhost:9094` (`spring-boot-starter-kafka`, config in `application.yaml`). `KafkaTopicConfig` declares a `reservation-place-topic` (3 partitions) on startup, but no producer or consumer is wired up yet — it's infrastructure ready for use, not an active event flow.
+A Kafka broker is available at `localhost:9094` (`spring-boot-starter-kafka`, config in `application.yaml`). `KafkaTopicConfig` declares two topics (3 partitions each) on startup: `reservation-place-topic` (reserved for future use — no producer/consumer yet) and `reservation-expired-topic`, which drives reservation expiry:
+
+- `cronjob.ReservationTimeoutWorker` polls every 3s (`@Scheduled(fixedDelay = 3000)`) for `PENDING` reservations whose hold has passed `expiresAt` (batches of 100, via `ReservationRepository.findByStatusAndExpiresAtBefore`) and publishes a `ReservationExpiredEvent(reservationId)` per candidate to `reservation-expired-topic`.
+- `messaging.ReservationExpiredConsumer` (`@KafkaListener`, group `footballticket-reservation-expiry`) consumes those events and calls `ReservationService.expireReservation(id)`, which atomically flips the reservation to `EXPIRED` and releases its held stock — a no-op if the reservation already moved out of `PENDING` for another reason (confirmed/cancelled/already expired), so redelivery of the same message is safe.
+
+This replaces an earlier direct in-process expiry job — expiry is now detect-and-dispatch (worker) separated from execute (consumer), so the actual cancellation can be scaled/retried independently of the poller.
 
 Inspect the broker via Kafka UI (`http://localhost:8090`) or its CLI (run inside the container, so it uses the internal listener port `9092` rather than the host-mapped `9094`):
 
 ```bash
-docker exec football-ticket-kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 --list
+docker exec football-ticket-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic reservation-expired-topic --from-beginning
 ```
 
 ## API response format

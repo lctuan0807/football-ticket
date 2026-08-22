@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -40,6 +41,7 @@ import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.ReservationRepository;
 import com.footballticket.repository.TicketTypeRepository;
+import com.footballticket.service.RedisService;
 
 import jakarta.persistence.PessimisticLockException;
 
@@ -58,6 +60,9 @@ class ReservationServiceImplTest {
   @Mock
   private RLock lock;
 
+  @Mock
+  private RedisService redisService;
+
   private final ModelMapper modelMapper = new ModelMapper();
 
   private ReservationServiceImpl reservationService;
@@ -65,7 +70,7 @@ class ReservationServiceImplTest {
   @BeforeEach
   void setUp() throws InterruptedException {
     reservationService = new ReservationServiceImpl(ticketTypeRepository, reservationRepository, modelMapper,
-        redissonClient);
+        redissonClient, redisService);
     lenient().when(redissonClient.getLock(any(String.class))).thenReturn(lock);
     lenient().when(lock.tryLock(1, 5, TimeUnit.SECONDS)).thenReturn(true);
   }
@@ -101,6 +106,8 @@ class ReservationServiceImplTest {
     assertThat(persisted.getQuantity()).isEqualTo(2);
     assertThat(persisted.getStatus()).isEqualTo(0);
     assertThat(persisted.getExpiresAt()).isCloseTo(LocalDateTime.now().plusMinutes(15), within(5, ChronoUnit.SECONDS));
+
+    verify(redisService).zAdd(eq(ReservationServiceImpl.RESERVATION_EXPIRY_ZSET_KEY), eq("100"), anyDouble());
   }
 
   @Test
@@ -196,6 +203,7 @@ class ReservationServiceImplTest {
     assertThat(ticketTypeIdCaptor.getValue()).isEqualTo(10L);
     assertThat(quantityCaptor.getValue()).isEqualTo(3);
     verify(lock).unlock();
+    verify(redisService).zRemove(ReservationServiceImpl.RESERVATION_EXPIRY_ZSET_KEY, "100");
   }
 
   @Test
@@ -445,6 +453,7 @@ class ReservationServiceImplTest {
     verify(ticketTypeRepository).release(ticketTypeIdCaptor.capture(), quantityCaptor.capture());
     assertThat(ticketTypeIdCaptor.getValue()).isEqualTo(10L);
     assertThat(quantityCaptor.getValue()).isEqualTo(3);
+    verify(redisService).zRemove(ReservationServiceImpl.RESERVATION_EXPIRY_ZSET_KEY, "100");
   }
 
   @Test
@@ -479,6 +488,54 @@ class ReservationServiceImplTest {
 
     assertThatThrownBy(() -> reservationService.confirmReservation(100L))
         .isInstanceOf(InvalidReservationStateException.class);
+
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+  }
+
+  @Test
+  void expireReservation_releasesStockAndMarksExpired_whenReservationIsPending() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setTicketTypeId(10L);
+    reservation.setQuantity(3);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(reservationRepository.updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.EXPIRED.toInt())).willReturn(1);
+
+    reservationService.expireReservation(100L);
+
+    ArgumentCaptor<Long> ticketTypeIdCaptor = ArgumentCaptor.forClass(Long.class);
+    ArgumentCaptor<Integer> quantityCaptor = ArgumentCaptor.forClass(Integer.class);
+    verify(ticketTypeRepository).release(ticketTypeIdCaptor.capture(), quantityCaptor.capture());
+    assertThat(ticketTypeIdCaptor.getValue()).isEqualTo(10L);
+    assertThat(quantityCaptor.getValue()).isEqualTo(3);
+    verify(redisService).zRemove(ReservationServiceImpl.RESERVATION_EXPIRY_ZSET_KEY, "100");
+  }
+
+  @Test
+  void expireReservation_doesNothing_whenReservationMissing() {
+    given(reservationRepository.findById(999L)).willReturn(Optional.empty());
+
+    reservationService.expireReservation(999L);
+
+    verify(reservationRepository, never()).updateStatusIfCurrentStatus(any(), any(), any());
+    verify(ticketTypeRepository, never()).release(any(), anyInt());
+    verify(redisService).zRemove(ReservationServiceImpl.RESERVATION_EXPIRY_ZSET_KEY, "999");
+  }
+
+  @Test
+  void expireReservation_doesNotReleaseStock_whenAlreadyTransitionedByConcurrentRequest() {
+    ReservationEntity reservation = new ReservationEntity();
+    reservation.setId(100L);
+    reservation.setTicketTypeId(10L);
+    reservation.setQuantity(3);
+    reservation.setStatus(ReservationStatusEnum.PENDING.toInt());
+    given(reservationRepository.findById(100L)).willReturn(Optional.of(reservation));
+    given(reservationRepository.updateStatusIfCurrentStatus(100L, ReservationStatusEnum.PENDING.toInt(),
+        ReservationStatusEnum.EXPIRED.toInt())).willReturn(0);
+
+    reservationService.expireReservation(100L);
 
     verify(ticketTypeRepository, never()).release(any(), anyInt());
   }

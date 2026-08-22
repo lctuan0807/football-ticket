@@ -12,8 +12,6 @@ import com.footballticket.entity.ReservationEntity;
 import jakarta.transaction.Transactional;
 
 public interface ReservationRepository extends JpaRepository<ReservationEntity, Long> {
-  // List<ReservationEntity> findByStatusAndExpiresAtBefore(ReservationStatusEnum
-  // status, LocalDateTime time);
 
   boolean existsByUserIdAndTicketTypeIdAndStatusAndExpiresAtAfter(
       Long userId, Long ticketTypeId, Integer status, LocalDateTime now);
