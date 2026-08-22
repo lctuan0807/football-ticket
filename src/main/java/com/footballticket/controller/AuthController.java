@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.footballticket.common.ApiResponse;
 import com.footballticket.dto.auth.AuthResponse;
 import com.footballticket.dto.auth.LoginRequest;
+import com.footballticket.dto.auth.RefreshTokenRequest;
 import com.footballticket.dto.auth.RegisterRequest;
 import com.footballticket.dto.user.UserDTO;
 import com.footballticket.service.AuthService;
@@ -39,11 +40,20 @@ public class AuthController {
     return ResponseEntity.ok(ApiResponse.success("Login successful", authResponse));
   }
 
+  @PostMapping("/refresh")
+  public ResponseEntity<ApiResponse<AuthResponse>> refresh(@RequestBody @Valid RefreshTokenRequest request) {
+    AuthResponse authResponse = authService.refresh(request.refreshToken());
+    return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", authResponse));
+  }
+
   @PostMapping("/logout")
-  public ResponseEntity<Void> logout(@RequestHeader(value = "Authorization", required = false) String authHeader) {
-    if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
-      authService.logout(authHeader.substring(BEARER_PREFIX.length()));
-    }
+  public ResponseEntity<Void> logout(@RequestHeader(value = "Authorization", required = false) String authHeader,
+      @RequestBody(required = false) RefreshTokenRequest request) {
+    String accessToken = authHeader != null && authHeader.startsWith(BEARER_PREFIX)
+        ? authHeader.substring(BEARER_PREFIX.length())
+        : null;
+    String refreshToken = request != null ? request.refreshToken() : null;
+    authService.logout(accessToken, refreshToken);
     return ResponseEntity.noContent().build();
   }
 }

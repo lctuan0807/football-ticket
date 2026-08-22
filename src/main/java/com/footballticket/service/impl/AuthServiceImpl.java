@@ -18,6 +18,7 @@ import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.repository.UserRepository;
 import com.footballticket.security.JwtService;
 import com.footballticket.service.AuthService;
+import com.footballticket.service.RefreshTokenService;
 import com.footballticket.service.TokenBlacklistService;
 
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class AuthServiceImpl implements AuthService {
   private final AuthenticationManager authenticationManager;
   private final JwtService jwtService;
   private final TokenBlacklistService tokenBlacklistService;
+  private final RefreshTokenService refreshTokenService;
 
   @Override
   public UserDTO register(RegisterRequest request) {
@@ -63,13 +65,31 @@ public class AuthServiceImpl implements AuthService {
     }
 
     String accessToken = jwtService.generateToken(request.username());
+    String refreshToken = refreshTokenService.issue(request.username());
     log.info("User logged in: {}", request.username());
 
-    return new AuthResponse(accessToken, "Bearer", jwtService.getExpirationMs() / 1000);
+    return new AuthResponse(accessToken, "Bearer", jwtService.getExpirationMs() / 1000, refreshToken);
   }
 
   @Override
-  public void logout(String token) {
-    tokenBlacklistService.blacklist(token);
+  public AuthResponse refresh(String refreshToken) {
+    String username = refreshTokenService.resolveUsername(refreshToken);
+    refreshTokenService.revoke(refreshToken);
+
+    String accessToken = jwtService.generateToken(username);
+    String newRefreshToken = refreshTokenService.issue(username);
+    log.info("Access token refreshed for user: {}", username);
+
+    return new AuthResponse(accessToken, "Bearer", jwtService.getExpirationMs() / 1000, newRefreshToken);
+  }
+
+  @Override
+  public void logout(String accessToken, String refreshToken) {
+    if (accessToken != null) {
+      tokenBlacklistService.blacklist(accessToken);
+    }
+    if (refreshToken != null && !refreshToken.isBlank()) {
+      refreshTokenService.revoke(refreshToken);
+    }
   }
 }

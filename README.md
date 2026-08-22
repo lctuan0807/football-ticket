@@ -35,6 +35,7 @@ A ticket reservation backend for football matches — manage matches and their t
    ```
    JWT_SECRET=<your-secret>
    JWT_EXPIRATION_MS=3600000
+   JWT_REFRESH_EXPIRATION_MS=604800000
    ```
    See `environment/.env.example`.
 
@@ -99,8 +100,9 @@ All endpoints are under `/api/v1`. Interactive docs are available via Swagger UI
 | Method | Path | Body | Description |
 |---|---|---|---|
 | POST | `/register` | `{ username, password }` (password min 8 chars) | Register a new user |
-| POST | `/login` | `{ username, password }` | Authenticate, returns `{ accessToken, tokenType, expiresIn }` |
-| POST | `/logout` | — (`Authorization: Bearer <token>` header) | Blacklist the current token |
+| POST | `/login` | `{ username, password }` | Authenticate, returns `{ accessToken, tokenType, expiresIn, refreshToken }` |
+| POST | `/refresh` | `{ refreshToken }` | Rotates the refresh token and issues a new access token; the old refresh token is invalidated |
+| POST | `/logout` | `{ refreshToken }` (optional; `Authorization: Bearer <token>` header optional) | Blacklists the access token and revokes the refresh token, if provided |
 
 ### Matches — `/api/v1/matches`
 
