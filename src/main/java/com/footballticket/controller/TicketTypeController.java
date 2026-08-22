@@ -3,6 +3,7 @@ package com.footballticket.controller;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TicketTypeController {
   private final TicketTypeService ticketTypeService;
 
+  @PreAuthorize("hasRole('ADMIN')")
   @PostMapping
   public ResponseEntity<ApiResponse<TicketTypeDTO>> createTicketType(@PathVariable Long matchId,
       @RequestBody @Valid CreateTicketTypeRequest request) {
@@ -50,6 +52,7 @@ public class TicketTypeController {
     return ResponseEntity.ok(ApiResponse.success(ticketType));
   }
 
+  @PreAuthorize("hasRole('ADMIN')")
   @PutMapping("/{id}")
   public ResponseEntity<ApiResponse<TicketTypeDTO>> updateTicketType(@PathVariable Long matchId,
       @PathVariable Long id, @RequestBody @Valid UpdateTicketTypeRequest request) {
@@ -57,6 +60,7 @@ public class TicketTypeController {
     return ResponseEntity.ok(ApiResponse.success("Ticket type updated successfully", ticketType));
   }
 
+  @PreAuthorize("hasRole('ADMIN')")
   @DeleteMapping("/{id}")
   public ResponseEntity<Void> deleteTicketType(@PathVariable Long matchId, @PathVariable Long id) {
     ticketTypeService.deleteTicketType(matchId, id);

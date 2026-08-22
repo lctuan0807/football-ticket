@@ -12,6 +12,7 @@ import com.footballticket.dto.auth.LoginRequest;
 import com.footballticket.dto.auth.RegisterRequest;
 import com.footballticket.dto.user.UserDTO;
 import com.footballticket.entity.UserEntity;
+import com.footballticket.enums.UserRoleEnum;
 import com.footballticket.exceptions.InvalidCredentialsException;
 import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.repository.UserRepository;
@@ -42,11 +43,14 @@ public class AuthServiceImpl implements AuthService {
     UserEntity user = new UserEntity();
     user.setUsername(request.username());
     user.setPassword(passwordEncoder.encode(request.password()));
+    user.setRole(UserRoleEnum.USER.toInt());
 
     UserEntity saved = userRepository.save(user);
     log.info("User registered: {} (id={})", saved.getUsername(), saved.getId());
 
-    return modelMapper.map(saved, UserDTO.class);
+    UserDTO dto = modelMapper.map(saved, UserDTO.class);
+    dto.setRole(UserRoleEnum.values()[saved.getRole()].name());
+    return dto;
   }
 
   @Override

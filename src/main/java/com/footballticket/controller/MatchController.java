@@ -3,6 +3,7 @@ package com.footballticket.controller;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,6 +32,7 @@ public class MatchController {
   private final MatchService matchService;
 
   // Create a match
+  @PreAuthorize("hasRole('ADMIN')")
   @PostMapping
   public ResponseEntity<ApiResponse<MatchDTO>> createMatch(@RequestBody @Valid CreateMatchRequest request) {
     MatchDTO match = matchService.createMatch(request);
@@ -54,6 +56,7 @@ public class MatchController {
   }
 
   // Update a match
+  @PreAuthorize("hasRole('ADMIN')")
   @PutMapping("/{id}")
   public ResponseEntity<ApiResponse<MatchDTO>> updateMatch(@PathVariable Long id,
       @RequestBody @Valid UpdateMatchRequest request) {
@@ -62,6 +65,7 @@ public class MatchController {
   }
 
   // Delete a match
+  @PreAuthorize("hasRole('ADMIN')")
   @DeleteMapping("/{id}")
   public ResponseEntity<Void> deleteMatch(@PathVariable Long id) {
     matchService.deleteMatch(id);
