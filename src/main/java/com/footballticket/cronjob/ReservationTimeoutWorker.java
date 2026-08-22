@@ -1,18 +1,15 @@
 package com.footballticket.cronjob;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Set;
 
-import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.footballticket.config.KafkaTopicConfig;
-import com.footballticket.entity.ReservationEntity;
-import com.footballticket.enums.ReservationStatusEnum;
 import com.footballticket.messaging.ReservationExpiredEvent;
-import com.footballticket.repository.ReservationRepository;
+import com.footballticket.service.RedisService;
+import com.footballticket.service.impl.ReservationServiceImpl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,23 +20,23 @@ import lombok.extern.slf4j.Slf4j;
 public class ReservationTimeoutWorker {
   private static final int BATCH_SIZE = 100;
 
-  private final ReservationRepository reservationRepository;
+  private final RedisService redisService;
   private final KafkaTemplate<String, ReservationExpiredEvent> reservationExpiredKafkaTemplate;
 
   @Scheduled(fixedDelay = 3000)
   public void pollAndDispatch() {
     log.info("Processing reservations timeout");
-    List<ReservationEntity> expiredReservations = reservationRepository.findByStatusAndExpiresAtBefore(
-        ReservationStatusEnum.PENDING.toInt(), LocalDateTime.now(), PageRequest.of(0, BATCH_SIZE));
-    log.info("Found {} reservations to process", expiredReservations.size());
+    Set<String> expiredIds = redisService.zRangeByScore(
+        ReservationServiceImpl.RESERVATION_EXPIRY_ZSET_KEY, 0, System.currentTimeMillis(), BATCH_SIZE);
+    log.info("Found {} reservations to process", expiredIds.size());
 
-    if (expiredReservations.isEmpty()) {
+    if (expiredIds.isEmpty()) {
       return;
     }
 
-    for (ReservationEntity reservation : expiredReservations) {
-      Long id = reservation.getId();
-      reservationExpiredKafkaTemplate.send(KafkaTopicConfig.RESERVATION_EXPIRED_TOPIC, String.valueOf(id),
+    for (String idStr : expiredIds) {
+      Long id = Long.valueOf(idStr);
+      reservationExpiredKafkaTemplate.send(KafkaTopicConfig.RESERVATION_EXPIRED_TOPIC, idStr,
           new ReservationExpiredEvent(id))
           .whenComplete((result, ex) -> {
             if (ex != null) {

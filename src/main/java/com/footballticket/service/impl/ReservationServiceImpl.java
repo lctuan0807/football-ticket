@@ -2,6 +2,7 @@ package com.footballticket.service.impl;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.concurrent.TimeUnit;
 
 import org.modelmapper.ModelMapper;
@@ -23,6 +24,7 @@ import com.footballticket.exceptions.ResourceAlreadyExistsException;
 import com.footballticket.exceptions.ResourceNotFoundException;
 import com.footballticket.repository.ReservationRepository;
 import com.footballticket.repository.TicketTypeRepository;
+import com.footballticket.service.RedisService;
 import com.footballticket.service.ReservationService;
 
 import jakarta.persistence.PessimisticLockException;
@@ -35,11 +37,13 @@ import lombok.extern.slf4j.Slf4j;
 public class ReservationServiceImpl implements ReservationService {
 
   private static final Duration RESERVATION_HOLD_DURATION = Duration.ofMinutes(15);
+  public static final String RESERVATION_EXPIRY_ZSET_KEY = "reservation:expiry";
 
   private final TicketTypeRepository ticketTypeRepository;
   private final ReservationRepository reservationRepository;
   private final ModelMapper modelMapper;
   private final RedissonClient redissonClient;
+  private final RedisService redisService;
 
   @Override
   @Transactional
@@ -81,6 +85,9 @@ public class ReservationServiceImpl implements ReservationService {
       ReservationEntity saved = reservationRepository.save(reservation);
       log.info("Reservation created: id={} for ticketTypeId={} userId={}", saved.getId(), ticketTypeId,
           request.userId());
+
+      redisService.zAdd(RESERVATION_EXPIRY_ZSET_KEY, String.valueOf(saved.getId()),
+          toEpochMillis(saved.getExpiresAt()));
 
       return toDto(saved, matchId);
     } catch (PessimisticLockException e) {
@@ -143,11 +150,16 @@ public class ReservationServiceImpl implements ReservationService {
   }
 
   private void expireAndReleaseStock(ReservationEntity reservation) {
+    redisService.zRemove(RESERVATION_EXPIRY_ZSET_KEY, String.valueOf(reservation.getId()));
     int updated = reservationRepository.updateStatusIfCurrentStatus(
         reservation.getId(), ReservationStatusEnum.PENDING.toInt(), ReservationStatusEnum.EXPIRED.toInt());
     if (updated > 0) {
       ticketTypeRepository.release(reservation.getTicketTypeId(), reservation.getQuantity());
     }
+  }
+
+  private static double toEpochMillis(LocalDateTime dateTime) {
+    return dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
   }
 
   @Override
@@ -156,12 +168,10 @@ public class ReservationServiceImpl implements ReservationService {
     ReservationEntity reservation = reservationRepository.findById(id).orElse(null);
     if (reservation == null) {
       log.warn("Reservation {} not found when attempting to expire", id);
+      redisService.zRemove(RESERVATION_EXPIRY_ZSET_KEY, String.valueOf(id));
       return;
     }
 
-    // Conditional update inside expireAndReleaseStock makes this a no-op if the
-    // reservation already moved out of PENDING (confirmed/cancelled/already
-    // expired), so re-delivery of the same Kafka message is safe.
     expireAndReleaseStock(reservation);
     log.info("Reservation {} expired via timeout worker", id);
   }
@@ -197,6 +207,7 @@ public class ReservationServiceImpl implements ReservationService {
       }
 
       ticketTypeRepository.release(reservation.getTicketTypeId(), reservation.getQuantity());
+      redisService.zRemove(RESERVATION_EXPIRY_ZSET_KEY, String.valueOf(id));
 
       TicketTypeEntity ticketType = ticketTypeRepository.findById(reservation.getTicketTypeId())
           .orElseThrow(() -> new ResourceNotFoundException(

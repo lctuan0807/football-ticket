@@ -2,8 +2,10 @@ package com.footballticket.service.impl;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import com.footballticket.service.RedisService;
@@ -15,9 +17,11 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 public class RedisServiceImpl implements RedisService {
   private final RedisTemplate<String, Object> redisTemplate;
+  private final StringRedisTemplate stringRedisTemplate;
 
-  public RedisServiceImpl(RedisTemplate<String, Object> redisTemplate) {
+  public RedisServiceImpl(RedisTemplate<String, Object> redisTemplate, StringRedisTemplate stringRedisTemplate) {
     this.redisTemplate = redisTemplate;
+    this.stringRedisTemplate = stringRedisTemplate;
   }
 
   @Override
@@ -78,5 +82,20 @@ public class RedisServiceImpl implements RedisService {
   @Override
   public void delete(String key) {
     redisTemplate.delete(key);
+  }
+
+  @Override
+  public void zAdd(String key, String member, double score) {
+    stringRedisTemplate.opsForZSet().add(key, member, score);
+  }
+
+  @Override
+  public void zRemove(String key, String member) {
+    stringRedisTemplate.opsForZSet().remove(key, member);
+  }
+
+  @Override
+  public Set<String> zRangeByScore(String key, double min, double max, long limit) {
+    return stringRedisTemplate.opsForZSet().rangeByScore(key, min, max, 0, limit);
   }
 }

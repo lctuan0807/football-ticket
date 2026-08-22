@@ -5,6 +5,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
 import java.time.Duration;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.ZSetOperations;
 
 @ExtendWith(MockitoExtension.class)
 class RedisServiceImplTest {
@@ -23,11 +26,17 @@ class RedisServiceImplTest {
   @Mock
   private ValueOperations<String, Object> valueOperations;
 
+  @Mock
+  private StringRedisTemplate stringRedisTemplate;
+
+  @Mock
+  private ZSetOperations<String, String> zSetOperations;
+
   private RedisServiceImpl redisService;
 
   @BeforeEach
   void setUp() {
-    redisService = new RedisServiceImpl(redisTemplate);
+    redisService = new RedisServiceImpl(redisTemplate, stringRedisTemplate);
   }
 
   @Test
@@ -115,5 +124,33 @@ class RedisServiceImplTest {
     redisService.delete("key");
 
     verify(redisTemplate).delete("key");
+  }
+
+  @Test
+  void zAdd_addsMemberWithScore() {
+    given(stringRedisTemplate.opsForZSet()).willReturn(zSetOperations);
+
+    redisService.zAdd("zkey", "1", 100.0);
+
+    verify(zSetOperations).add("zkey", "1", 100.0);
+  }
+
+  @Test
+  void zRemove_removesMember() {
+    given(stringRedisTemplate.opsForZSet()).willReturn(zSetOperations);
+
+    redisService.zRemove("zkey", "1");
+
+    verify(zSetOperations).remove("zkey", "1");
+  }
+
+  @Test
+  void zRangeByScore_returnsMembersInScoreRange() {
+    given(stringRedisTemplate.opsForZSet()).willReturn(zSetOperations);
+    given(zSetOperations.rangeByScore("zkey", 0, 100.0, 0, 50)).willReturn(Set.of("1", "2"));
+
+    Set<String> result = redisService.zRangeByScore("zkey", 0, 100.0, 50);
+
+    assertThat(result).containsExactlyInAnyOrder("1", "2");
   }
 }
