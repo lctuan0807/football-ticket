@@ -12,8 +12,7 @@ import com.footballticket.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-// Registration always creates a USER; this is the only way to get an ADMIN
-// account, since there's no admin-management endpoint yet.
+// This is for local development only, to create an admin user
 @Component
 @Slf4j
 @RequiredArgsConstructor
