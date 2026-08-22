@@ -24,8 +24,7 @@ public class RefreshTokenService {
   @Value("${jwt.refresh-expiration-ms}")
   private long refreshExpirationMs;
 
-  // Opaque, server-side-revocable token (deliberately not a JWT): identity is
-  // just the Redis key, so a single deletion on rotation/logout revokes it.
+  // use redis TTL to expire the refresh token
   public String issue(String username) {
     String token = generateToken();
     redisService.setObject(getCacheKey(token), username, Duration.ofMillis(refreshExpirationMs));
@@ -44,6 +43,7 @@ public class RefreshTokenService {
     redisService.delete(getCacheKey(token));
   }
 
+  // generate a random token instead of using JWT for simplicity
   private String generateToken() {
     byte[] randomBytes = new byte[32];
     SECURE_RANDOM.nextBytes(randomBytes);
