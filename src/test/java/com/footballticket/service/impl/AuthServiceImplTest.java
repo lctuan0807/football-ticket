@@ -31,9 +31,11 @@ import com.footballticket.entity.UserEntity;
 import com.footballticket.enums.UserRoleEnum;
 import com.footballticket.exceptions.InvalidCredentialsException;
 import com.footballticket.exceptions.ResourceAlreadyExistsException;
+import com.footballticket.exceptions.InvalidRefreshTokenException;
 import com.footballticket.repository.UserRepository;
 import com.footballticket.security.JwtService;
 import com.footballticket.service.RedisService;
+import com.footballticket.service.RefreshTokenService;
 import com.footballticket.service.TokenBlacklistService;
 
 @ExtendWith(MockitoExtension.class)
@@ -57,6 +59,9 @@ class AuthServiceImplTest {
   @Mock
   private RedisService redisService;
 
+  @Mock
+  private RefreshTokenService refreshTokenService;
+
   private AuthServiceImpl authService;
 
   private final RegisterRequest registerRequest = new RegisterRequest("tuanle", "password123");
@@ -66,7 +71,7 @@ class AuthServiceImplTest {
   void setUp() {
     TokenBlacklistService tokenBlacklistService = new TokenBlacklistService(redisService, jwtService);
     authService = new AuthServiceImpl(userRepository, modelMapper, passwordEncoder, authenticationManager,
-        jwtService, tokenBlacklistService);
+        jwtService, tokenBlacklistService, refreshTokenService);
   }
 
   @Test
@@ -114,12 +119,14 @@ class AuthServiceImplTest {
   void login_returnsAuthResponse_whenCredentialsAreValid() {
     given(jwtService.generateToken(loginRequest.username())).willReturn("access-token");
     given(jwtService.getExpirationMs()).willReturn(3600000L);
+    given(refreshTokenService.issue(loginRequest.username())).willReturn("refresh-token");
 
     AuthResponse result = authService.login(loginRequest);
 
     assertThat(result.accessToken()).isEqualTo("access-token");
     assertThat(result.tokenType()).isEqualTo("Bearer");
     assertThat(result.expiresIn()).isEqualTo(3600L);
+    assertThat(result.refreshToken()).isEqualTo("refresh-token");
     verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
   }
 
@@ -134,13 +141,48 @@ class AuthServiceImplTest {
   }
 
   @Test
-  void logout_blacklistsTokenForRemainingTtl() {
+  void logout_blacklistsAccessTokenForRemainingTtl() {
     String token = "some-token";
     Date expiration = new Date(System.currentTimeMillis() + 60_000);
     given(jwtService.extractExpiration(token)).willReturn(expiration);
 
-    authService.logout(token);
+    authService.logout(token, null);
 
     verify(redisService).setObject(eq("blacklist:token:" + token), eq(true), any(Duration.class));
+    verify(refreshTokenService, never()).revoke(any());
+  }
+
+  @Test
+  void logout_revokesRefreshToken_whenProvided() {
+    authService.logout(null, "some-refresh-token");
+
+    verify(refreshTokenService).revoke("some-refresh-token");
+  }
+
+  @Test
+  void refresh_returnsNewAccessAndRefreshToken_whenRefreshTokenIsValid() {
+    given(refreshTokenService.resolveUsername("old-refresh-token")).willReturn("tuanle");
+    given(jwtService.generateToken("tuanle")).willReturn("new-access-token");
+    given(jwtService.getExpirationMs()).willReturn(3600000L);
+    given(refreshTokenService.issue("tuanle")).willReturn("new-refresh-token");
+
+    AuthResponse result = authService.refresh("old-refresh-token");
+
+    assertThat(result.accessToken()).isEqualTo("new-access-token");
+    assertThat(result.refreshToken()).isEqualTo("new-refresh-token");
+    assertThat(result.expiresIn()).isEqualTo(3600L);
+    verify(refreshTokenService).revoke("old-refresh-token");
+  }
+
+  @Test
+  void refresh_throwsInvalidRefreshTokenException_whenTokenIsInvalid() {
+    given(refreshTokenService.resolveUsername("bad-token"))
+        .willThrow(new InvalidRefreshTokenException("Refresh token is invalid or has expired"));
+
+    assertThatThrownBy(() -> authService.refresh("bad-token"))
+        .isInstanceOf(InvalidRefreshTokenException.class);
+
+    verify(refreshTokenService, never()).revoke(any());
+    verify(jwtService, never()).generateToken(any());
   }
 }

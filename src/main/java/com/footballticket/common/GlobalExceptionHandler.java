@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.footballticket.exceptions.InsufficientTicketException;
 import com.footballticket.exceptions.InvalidCredentialsException;
+import com.footballticket.exceptions.InvalidRefreshTokenException;
 import com.footballticket.exceptions.InvalidReservationStateException;
 import com.footballticket.exceptions.ReservationCreationFailedException;
 import com.footballticket.exceptions.ResourceAlreadyExistsException;
@@ -32,8 +33,8 @@ public class GlobalExceptionHandler {
         .body(ApiResponse.error(HttpStatus.FORBIDDEN, "Access denied"));
   }
 
-  @ExceptionHandler(InvalidCredentialsException.class)
-  public ResponseEntity<ApiResponse<Void>> handleInvalidCredentialsException(InvalidCredentialsException e) {
+  @ExceptionHandler({ InvalidCredentialsException.class, InvalidRefreshTokenException.class })
+  public ResponseEntity<ApiResponse<Void>> handleInvalidCredentialsException(Exception e) {
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
         .body(ApiResponse.error(HttpStatus.UNAUTHORIZED, e.getMessage()));
   }
